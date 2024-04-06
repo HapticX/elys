@@ -11,7 +11,7 @@ type
     akTernary,
     akBinOpExpr, akRelative, akAnd, akOr, akIn, akNot,
     akEof,
-    akStmt, akStmtList, akAssign, akPrint
+    akStmt, akStmtList, akAssign, akPrint, akIncDec
   ASTRoot* = ref object of RootObj
     kind*: ASTKind
 
@@ -26,7 +26,7 @@ type
   StringAST* = ref object of ASTExpr
     val*: string
   ArrayAST* = ref object of ASTExpr
-    val*: seq[ASTExpr]
+    val*: seq[ASTRoot]
   VarAST* = ref object of ASTExpr
     name*: string
   BinOpAST* = ref object of ASTExpr
@@ -117,10 +117,10 @@ proc stringAst*(val: string): StringAST = StringAST(val: val, kind: akString)
 proc boolAst*(val: bool): BoolAST = BoolAST(val: val, kind: akBool)
 
 proc unaryOpAst*(expr: ASTRoot, op: string): UnaryOpAST =
-  UnaryOpAST(expr: expr, op: op)
+  UnaryOpAST(kind: akUnaryOp, expr: expr, op: op)
 
 proc incDecStmt*(expr: ASTRoot, op: string): IncDecStmt =
-  IncDecStmt(expr: expr, op: op)
+  IncDecStmt(kind: akIncDec, expr: expr, op: op)
 
 proc varAst*(val: string): VarAST = VarAST(name: val, kind: akVar)
 
@@ -138,6 +138,9 @@ proc assignStmtAst*(name: string, expr: ASTRoot,
   )
 
 
+method eval*(self: ASTRoot, env: Environment): ASTRoot {.base.} = nullAst()
+
+
 proc astName*(a: ASTRoot): string =
   case a.kind:
     of akInt: "int"
@@ -145,16 +148,28 @@ proc astName*(a: ASTRoot): string =
     of akNull: "null"
     of akBool: "bool"
     of akString: "string"
+    of akArr: "array"
     else: "object"
 
 
-proc astValue*(a: ASTRoot): string =
+proc astValue*(a: ASTRoot, env: Environment): string =
   case a.kind:
     of akInt: $a.IntAST.val
     of akFloat: $a.FloatAST.val
     of akNull: "null"
     of akBool: $a.BoolAST.val
     of akString: $a.StringAST.val
+    of akArr:
+      var
+        res = ""
+        i = 0
+      while i < a.ArrayAST.val.len:
+        if i == a.ArrayAST.val.len-1:
+          res &= $a.ArrayAST.val[i].eval(env).astValue(env)
+        else:
+          res &= $a.ArrayAST.val[i].eval(env).astValue(env) & ", "
+        inc i
+      "[" & res & "]"
     else: "object"
 
 
@@ -230,7 +245,17 @@ proc `%`*(a, b: ASTRoot): ASTRoot =
     raise newException(ValueError, "Cannot get mod of " & b.astName & " from " & a.astName)
 
 
-method eval*(self: ASTRoot, env: Environment): ASTRoot {.base.} = nullAst()
+proc `==`*(a, b: ASTRoot): ASTRoot =
+  if a.kind != b.kind:
+    return boolAst(false)
+  case a.kind:
+    of akInt: boolAst(a.IntAST == b.IntAST)
+    of akFloat: boolAst(a.FloatAST == b.FloatAST)
+    of akBool: boolAst(a.BoolAST == b.BoolAST)
+    of akString: boolAst(a.StringAST == b.StringAST)
+    of akNull: boolAst(true)
+    else: boolAst(a[] == b[])
+
 
 evalFor NullAST: nullAst()
 evalFor IntAST: intAst(self.val)
@@ -282,7 +307,6 @@ method eval*(self: StmtList, env: Environment): ASTRoot =
   var environment = newEnv(env)
   for s in self.statements:
     discard s.eval(environment)
-
 
 method eval(self: BinOpAST, env: Environment): ASTRoot =
   let

@@ -81,7 +81,7 @@ proc aExprValue(): Combinator =
 
 
 proc aExpr(): Combinator
-
+proc incDecStatement(): Combinator
 
 proc aExprGroup(): Combinator =
   (operator("(") + lazy(aExpr) + operator(")")) ^ processGroup
@@ -89,6 +89,7 @@ proc aExprGroup(): Combinator =
 
 proc aExprTerm(): Combinator =
   (
+    incDecStatement() |
     unaryOperatorStmt() |
     aExprValue() |
     aExprGroup()
@@ -156,8 +157,10 @@ proc processPrint(res: Result): Option[Result] =
   for i in res.valy.arr:
     arr.add i
   astRes(printAst(arr))
-  
 proc printStmt(): Combinator =
+  # print(x)
+  # print x
+  # print x, y, z
   (
     keyword("print") + alt(
       (operator("(") + opt(
@@ -168,14 +171,29 @@ proc printStmt(): Combinator =
 
 
 proc processEof(res: Result): Option[Result] =
+  # \0
   astRes(eofStmt())
 
 
 proc processUnaryOperatorStmt(res: Result): Option[Result] =
   astRes(unaryOpAst(res.valy.ast, res.valx.val.get))
 proc unaryOperatorStmt(): Combinator =
-  # x = -x
+  # -x
   (anyOpInList(unaryOperators) + (aExprValue() | aExprGroup())) ^ processUnaryOperatorStmt
+
+
+proc processIncDec(res: Result): Option[Result] =
+  if res.valx.val.get in incDecOperators:
+    astRes(incDecStmt(varAst(res.valy.val.get), res.valx.val.get))
+  else:
+    astRes(incDecStmt(varAst(res.valx.val.get), res.valy.val.get))
+proc incDecStatement(): Combinator =
+  # x++
+  # --x
+  (
+    (anyOpInList(incDecOperators) + idTag) |
+    (idTag + anyOpInList(incDecOperators))
+  ) ^ processIncDec
 
 
 proc stmt(): Combinator =
@@ -184,6 +202,7 @@ proc stmt(): Combinator =
     assignStmt() |
     assignConstStmt() |
     reAssignStmt() |
+    incDecStatement() |
     expr() |
     (tag(TokenKind.tkEof) ^ processEof)
   )

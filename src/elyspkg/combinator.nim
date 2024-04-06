@@ -134,9 +134,9 @@ method eval*(self: PrintStmt, env: Environment): ASTRoot =
     i = 0
   while i < self.data.len:
     if i == self.data.len-1:
-      res &= $self.data[i].ast.eval(env).astValue
+      res &= $self.data[i].ast.eval(env).astValue(env)
     else:
-      res &= $self.data[i].ast.eval(env).astValue & ", "
+      res &= $self.data[i].ast.eval(env).astValue(env) & ", "
     inc i
   echo res
   nullAst()

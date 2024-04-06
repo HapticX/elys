@@ -1,15 +1,24 @@
-import ../src/elys
+import
+  ../src/elys,
+  unittest
 
 
-exec("""
-# Here we just declare variables
-var x = 10
-var y = 20
-
-# Unary operator in action
-x = -x + 5
-print x
-
-print x + y
-print -x + y
-""")
+suite "Elys":
+  test "Variables":
+    exec("""
+    # Here we just declare variables
+    var x = 10
+    var y = 20
+    """)
+  test "Basic math":
+    exec("""
+    print -5 + 10
+    print 2 + 2 * 2 / -10 * .1
+    """)
+  test "increment / decrement":
+    exec("""
+    var x = 10
+    print x
+    print x++
+    print ++x
+    """)

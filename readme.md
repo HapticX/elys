@@ -1,6 +1,6 @@
 <div align="center">
 
-# Elys
+# elys
 ### scripting language
 
 </div>
