@@ -1,0 +1,44 @@
+name: Tests 🧪
+
+on:
+  push:
+    branches:
+      - 'master'
+
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os:
+          - ubuntu-latest
+        nim_version:
+          - '2.0.2'
+          - 'latest'
+    env:
+      TIMEOUT_EXIT_STATUS: 124
+    steps:
+      - uses: actions/checkout@v3
+      - name: Cache nimble
+        id: cache-nimble
+        uses: actions/cache@v3
+        with:
+          path: ~/.nimble
+          key: ${{ runner.os }}-nimble-${{ hashFiles('*.nimble') }}
+      - uses: jiro4989/setup-nim-action@v1
+        with:
+          nim-version: ${{ matrix.nim_version }}
+      
+      - name: Install Dependencies 🔃
+        run: |
+          nimble refresh
+      
+      - name: Build tests 🔨
+        run: |
+          cd tests
+          for file in $(ls -v test*.nim); do
+            echo "###===--- C Test for " $file " ---===###"
+            nim c -r --opt:size --passC:-flto --passL:-flto -d:strip -d:danger $file
+          done
+        shell: bash

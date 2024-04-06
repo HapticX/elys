@@ -1,0 +1,6 @@
+# Builds
+*.exe
+*.js
+
+# Cache
+cache/
