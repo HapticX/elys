@@ -35,11 +35,26 @@ jobs:
         run: |
           nimble refresh
       
-      - name: Build tests 🔨
+      - name: Build C tests 🔨
         run: |
           cd tests
           for file in $(ls -v test*.nim); do
-            echo "###===--- C Test for " $file " ---===###"
             nim c -r --opt:size --passC:-flto --passL:-flto -d:strip -d:danger $file
+          done
+        shell: bash
+      
+      - name: Build C++ tests 🔨
+        run: |
+          cd tests
+          for file in $(ls -v test*.nim); do
+            nim cpp -r --opt:size --passC:-flto --passL:-flto -d:strip -d:danger $file
+          done
+        shell: bash
+      
+      - name: Build JavaScript tests 🔨
+        run: |
+          cd tests
+          for file in $(ls -v test*.nim); do
+            nim js -r --opt:size -d:danger $file
           done
         shell: bash
