@@ -11,10 +11,7 @@ var x = 10
 var y = 20
 print(x + y, 2 + 2 * 2 / 10 * .1)
 
-x += 2
-x += 2
-x += 2
-x *= 2
+x *= -2
 print x
 
 print 7 / 3

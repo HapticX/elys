@@ -49,7 +49,8 @@ let
     @["+", "-", "%"]
   ]
   relationalOperators = @["==", "!=", ">=", "<=", "<", ">"]
-  unaryOperators = @["--", "++", "-"]
+  incDecOperators = @["--", "++"]
+  unaryOperators = @["-"]
   assignOperators = @["//=", "+=", "-=", "*=", "/=", "="]
   bExprPrecedenceLevels = @[
       @["and", "&&"],
@@ -63,6 +64,9 @@ proc processFloatNumber(res: Result): Option[Result] = astRes(floatAst(res.valf)
 proc processBoolean(res: Result): Option[Result] = astRes(boolAst(res.valb))
 proc processVar(res: Result): Option[Result] = astRes(varAst(res.val.get))
 proc processGroup(res: Result): Option[Result] = res.valx.valy.some
+
+
+proc unaryOperatorStmt(): Combinator
 
 
 proc aExprValue(): Combinator =
@@ -86,7 +90,8 @@ proc aExprGroup(): Combinator =
 proc aExprTerm(): Combinator =
   (
     aExprValue() |
-    aExprGroup()
+    aExprGroup() |
+    unaryOperatorStmt()
   )
 
 proc processBinOp(res: Result): Option[Result] =
@@ -164,6 +169,14 @@ proc printStmt(): Combinator =
 
 proc processEof(res: Result): Option[Result] =
   astRes(eofStmt())
+
+
+proc processUnaryOperatorStmt(res: Result): Option[Result] =
+  echo res
+  astRes(unaryOpAst(res.valy.ast, res.valx.val.get))
+proc unaryOperatorStmt(): Combinator =
+  # x = -x
+  (anyOpInList(unaryOperators) + lazy(aExpr)) ^ processUnaryOperatorStmt
 
 
 proc stmt(): Combinator =

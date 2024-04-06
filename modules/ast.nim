@@ -112,6 +112,9 @@ proc floatAst*(val: float): FloatAST = FloatAST(val: val, kind: akFloat)
 proc stringAst*(val: string): StringAST = StringAST(val: val, kind: akString)
 proc boolAst*(val: bool): BoolAST = BoolAST(val: val, kind: akBool)
 
+proc unaryOpAst*(expr: ASTRoot, op: string): UnaryOpAST =
+  UnaryOpAST(expr: expr, op: op)
+
 proc varAst*(val: string): VarAST = VarAST(name: val, kind: akVar)
 
 proc binOpAst*(l, r: ASTRoot, op: string): BinOpAST = BinOpAST(l: l, r: r, op: op, kind: akBinOp)
@@ -232,6 +235,16 @@ method eval*(self: VarAST, env: Environment): ASTRoot =
   if not env.vars.hasKey(self.name):
     raise newException(RuntimeError, "Variable " & self.name & " was not assigned before")
   env.vars[self.name].val
+
+method eval*(self: UnaryOpAST, env: Environment): ASTRoot =
+  let val = self.expr.eval(env)
+  if val.kind == akInt:
+    val.IntAST.val = -val.IntAST.val
+    return val
+  elif val.kind == akFloat:
+    val.FloatAST.val = -val.FloatAST.val
+    return val
+  raise newException(RuntimeError, "Can not to apply unary operator '" & self.op & "' to " & $self.expr)
 
 method eval*(self: StmtList, env: Environment): ASTRoot =
   var environment = newEnv(env)
