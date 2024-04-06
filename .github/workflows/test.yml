@@ -14,8 +14,9 @@ jobs:
         os:
           - ubuntu-latest
         nim_version:
+          - '1.6.16'
+          - '2.0.0'
           - '2.0.2'
-          - 'latest'
     env:
       TIMEOUT_EXIT_STATUS: 124
     steps:
