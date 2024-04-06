@@ -102,13 +102,15 @@ func parseForTokens*(source: string): seq[Token] =
     elif src.findRe(re2"^(\d+)", m):
       result.add tkn(src, m, i, tkInt)
     # Operators
-    elif src.findRe(re2"^([\.\+\-/\\,;:\[\]\(\)\{\}~!@#$%^&?*=><]+)", m):
+    elif src.findRe(re2"^([\.\+\-/\\,;:\[\]\(\)\{\}~!@#$%^|&?*=><]+)", m):
+      result.add tkn(src, m, i, tkOp)
+    elif src.findRe(re2"^(\b(not|or|and|in)\b)", m):
       result.add tkn(src, m, i, tkOp)
     # Boolean
     elif src.findRe(re2"^(\b(true|false|on|off)\b)", m):
       result.add tkn(src, m, i, tkBool)
     # Keywords
-    elif src.findRe(re2"^(\b(if|elif|else|while|for|in|case|of|var|const)\b)", m):
+    elif src.findRe(re2"^(\b(if|elif|else|while|for|case|of|var|const)\b)", m):
       result.add tkn(src, m, i, tkKeyword)
     elif src.findRe(re2"^(\b(print|null)\b)", m):
       result.add tkn(src, m, i, tkKeyword)

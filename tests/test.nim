@@ -22,3 +22,11 @@ suite "Elys":
     print x++
     print ++x
     """)
+  test "Basic bool operations":
+    exec("""
+    var x = true
+    var y = false
+    x = true or false
+    print x
+    print x and y, x or y
+    """)

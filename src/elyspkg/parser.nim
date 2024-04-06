@@ -44,19 +44,17 @@ let
   boolean = tag(TokenKind.tkBool) ^ processBool
   null = keyword("null") ^ processNull
   str = tag(TokenKind.tkString) ^ processString
-  aExprPrecedenceLevels = @[
+  exprPrecedenceLevels = @[
     @["*", "/", "//"],
-    @["+", "-", "%"]
+    @["+", "-", "%"],
+    @["and", "&&"],
+    @["or", "||"],
+    @["in"],
+    @["==", "!=", ">=", "<=", "<", ">"]
   ]
-  relationalOperators = @["==", "!=", ">=", "<=", "<", ">"]
   incDecOperators = @["--", "++"]
   unaryOperators = @["-"]
   assignOperators = @["//=", "+=", "-=", "*=", "/=", "="]
-  bExprPrecedenceLevels = @[
-      @["and", "&&"],
-      @["or", "||"],
-      @["in"]
-  ]
 
 
 proc processIntNumber(res: Result): Option[Result] = astRes(intAst(res.vali))
@@ -66,10 +64,7 @@ proc processVar(res: Result): Option[Result] = astRes(varAst(res.val.get))
 proc processGroup(res: Result): Option[Result] = res.valx.valy.some
 
 
-proc unaryOperatorStmt(): Combinator
-
-
-proc aExprValue(): Combinator =
+proc exprValue(): Combinator =
   (
     (intNumber ^ processIntNumber) |
     (floatNumber ^ processFloatNumber) |
@@ -80,19 +75,29 @@ proc aExprValue(): Combinator =
   )
 
 
-proc aExpr(): Combinator
+proc expr(): Combinator
+proc exprTerm(): Combinator
 proc incDecStatement(): Combinator
-
-proc aExprGroup(): Combinator =
-  (operator("(") + lazy(aExpr) + operator(")")) ^ processGroup
+proc unaryOperatorStmt(): Combinator
 
 
-proc aExprTerm(): Combinator =
+proc exprGroup(): Combinator =
+  (operator("(") + lazy(expr) + operator(")")) ^ processGroup
+
+
+proc processBExprNot(res: Result): Option[Result] =
+  astRes(notAst(res.valy.ast))
+proc bExprNot(): Combinator =
+  ((operator("!") | operator("not")) + lazy(exprTerm)) ^ processBExprNot
+
+
+proc exprTerm(): Combinator =
   (
     incDecStatement() |
     unaryOperatorStmt() |
-    aExprValue() |
-    aExprGroup()
+    bExprNot() |
+    exprValue() |
+    exprGroup()
   )
 
 proc processBinOp(res: Result): Option[Result] =
@@ -116,13 +121,8 @@ proc precedence(c: Combinator, levels: seq[seq[string]], combine: ProcessFunc): 
     result = result * (anyOpInList(lvl) ^ combine)
 
 
-
-proc aExpr(): Combinator =
-  precedence(aExprTerm(), aExprPrecedenceLevels, processBinOp)
-
-
 proc expr(): Combinator =
-  aExpr()
+  precedence(exprTerm(), exprPrecedenceLevels, processBinOp)
 
 
 # ---=== Statements ===--- #
@@ -179,7 +179,7 @@ proc processUnaryOperatorStmt(res: Result): Option[Result] =
   astRes(unaryOpAst(res.valy.ast, res.valx.val.get))
 proc unaryOperatorStmt(): Combinator =
   # -x
-  (anyOpInList(unaryOperators) + (aExprValue() | aExprGroup())) ^ processUnaryOperatorStmt
+  (anyOpInList(unaryOperators) + (exprValue() | exprGroup())) ^ processUnaryOperatorStmt
 
 
 proc processIncDec(res: Result): Option[Result] =

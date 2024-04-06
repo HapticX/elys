@@ -9,7 +9,7 @@ type
     akRoot,
     akExpr, akNull, akInt, akFloat, akBool, akString, akArr, akVar, akBinOp, akUnaryOp,
     akTernary,
-    akBinOpExpr, akRelative, akAnd, akOr, akIn, akNot,
+    akBinOpExpr, akRelativeOp, akAnd, akOr, akIn, akNot,
     akEof,
     akStmt, akStmtList, akAssign, akPrint, akIncDec
   ASTRoot* = ref object of RootObj
@@ -91,7 +91,13 @@ method `$`*(ast: IntAST): string = "IntAST(" & $ast.val & ")"
 method `$`*(ast: FloatAST): string = "FloatAST(" & $ast.val & ")"
 method `$`*(ast: StringAST): string = "StringAST(" & $ast.val & ")"
 method `$`*(ast: BoolAST): string = "BoolAST(" & $ast.val & ")"
+method `$`*(ast: BinOpAST): string = "BinOpAST(" & $ast.l & ", " & $ast.r & ", " & ast.op & ")"
 method `$`*(ast: VarAST): string = "VarAST(" & ast.name & ")"
+method `$`*(ast: NotOp): string = "NotOp(" & $ast.expr & ")"
+method `$`*(ast: AndOp): string = "AndOp(" & $ast.l & ", " & $ast.r & ")"
+method `$`*(ast: OrOp): string = "OrOp(" & $ast.l & ", " & $ast.r & ")"
+method `$`*(ast: InOp): string = "InOp(" & $ast.l & ", " & $ast.r & ")"
+method `$`*(ast: RelativeOp): string = "RelativeOp(" & $ast.l & ", " & $ast.r & ", " & ast.op & ")"
 method `$`*(ast: EofStmt): string = "EOFStmt()"
 
 
@@ -124,9 +130,16 @@ proc incDecStmt*(expr: ASTRoot, op: string): IncDecStmt =
 
 proc varAst*(val: string): VarAST = VarAST(name: val, kind: akVar)
 
-proc binOpAst*(l, r: ASTRoot, op: string): BinOpAST = BinOpAST(l: l, r: r, op: op, kind: akBinOp)
+proc binOpAst*(l, r: ASTRoot, op: string): BinOpAST =
+  BinOpAST(l: l, r: r, op: op, kind: akBinOp)
 
-proc statementList*(stmts: seq[ASTRoot]): StmtList = StmtList(statements: stmts, kind: akStmtList)
+proc relOp*(l, r: ASTRoot, op: string): RelativeOp =
+  RelativeOp(l: l, r: r, op: op, kind: akRelativeOp)
+proc notAst*(expr: ASTRoot): NotOp =
+  NotOp(expr: expr, kind: akNot)
+
+proc statementList*(stmts: seq[ASTRoot]): StmtList =
+  StmtList(statements: stmts, kind: akStmtList)
 
 proc assignStmtAst*(name: string, expr: ASTRoot,
                     isConst: bool = false, isAssign: bool = false,
@@ -257,6 +270,44 @@ proc `==`*(a, b: ASTRoot): ASTRoot =
     else: boolAst(a[] == b[])
 
 
+proc `!=`*(a, b: ASTRoot): ASTRoot =
+  boolAst(not (a == b).BoolAST.val)
+
+
+proc `>`*(a, b: ASTRoot): ASTRoot =
+  if a.kind == akInt and b.kind == akInt:
+    return boolAst(a.IntAST.val > b.IntAST.val)
+  elif a.kind == akFloat and b.kind == akFloat:
+    return boolAst(a.FloatAST.val > b.FloatAST.val)
+  elif a.kind == akInt and b.kind == akFloat:
+    return boolAst(a.IntAST.val.float > b.FloatAST.val)
+  elif a.kind == akFloat and b.kind == akInt:
+    return boolAst(a.FloatAST.val > b.IntAST.val.float)
+  raise newException(
+    ValueError, "Can not compare " & $a & " with " & $a
+  )
+
+
+proc `>=`*(a, b: ASTRoot): ASTRoot =
+  boolAst((a == b).BoolAST.val or (a > b).BoolAST.val)
+
+
+proc `<`*(a, b: ASTRoot): ASTRoot =
+  boolAst(not (a >= b).BoolAST.val)
+
+
+proc `<=`*(a, b: ASTRoot): ASTRoot =
+  boolAst((a == b).BoolAST.val or (a < b).BoolAST.val)
+
+
+proc `and`*(a, b: ASTRoot): ASTRoot =
+  boolAst(a.BoolAST.val and b.BoolAST.val)
+
+
+proc `or`*(a, b: ASTRoot): ASTRoot =
+  boolAst(a.BoolAST.val or b.BoolAST.val)
+
+
 evalFor NullAST: nullAst()
 evalFor IntAST: intAst(self.val)
 evalFor FloatAST: floatAst(self.val)
@@ -314,17 +365,34 @@ method eval(self: BinOpAST, env: Environment): ASTRoot =
     right = self.r.eval(env)
   case self.op:
     of "+":
-      result = `+`(left, right)
+      return `+`(left, right)
     of "-":
-      result = `-`(left, right)
+      return `-`(left, right)
     of "*":
-      result = `*`(left, right)
+      return `*`(left, right)
     of "/":
-      result = `/`(left, right)
+      return `/`(left, right)
     of "%":
-      result = `%`(left, right)
+      return `%`(left, right)
     of "//":
-      result = `//`(left, right)
+      return `//`(left, right)
+    of "and", "&&":
+      return left and right
+    of "or", "||":
+      return left or right
+    of "==":
+      return `==`(left, right)
+    of "!=":
+      return `!=`(left, right)
+    of ">":
+      return `>`(left, right)
+    of "<":
+      return `<`(left, right)
+    of ">=":
+      return `>=`(left, right)
+    of "<=":
+      return `<=`(left, right)
+  raise newException(RuntimeError, "Unknown operator: '" & self.op & "'")
 
 method eval*(self: AssignStmt, env: Environment): ASTRoot =
   if self.isAssign and self.assignOp == "=":

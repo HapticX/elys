@@ -11,9 +11,8 @@ when isMainModule:
 
 
 proc exec*(code: string) =
-  let
-    tokens = code.parseForTokens
-    parsed = tokens.elysParser
+  let tokens = code.parseForTokens
+  let parsed = tokens.elysParser
   if parsed.isSome:
     var env = newEnv()
     discard parsed.get.ast.eval(env)

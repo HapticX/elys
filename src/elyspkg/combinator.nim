@@ -98,6 +98,12 @@ method `$`*(c: Phrase): string = "Phrase(" & $c.c & ")"
 proc astRes*(ast: ASTRoot): Option[Result] =
   Result(kind: rkAst, ast: ast).some
 
+proc fnRes*(function: ResultFunc): Option[Result] =
+  Result(
+    kind: rkFun,
+    valfn: function
+  ).some
+
 proc getVal*(res: Result): string =
   case res.kind:
     of rkStr:
@@ -243,6 +249,15 @@ method call*(c: Phrase, tokens: seq[Token], pos: int): Option[Result] =
   if res.isSome and res.get.pos == tokens.len:
     return res
   elif res.isSome:
-    raise newException(RuntimeError, "error at " & $res.get.pos & " token. " & res.get.getVal)
+    if res.get.kind == rkAst:
+      raise newException(
+        RuntimeError,
+        "error at " & $res.get.pos & " token - " & res.get.getVal & " (" & $res.get.ast.kind & ")"
+      )
+    else:
+      raise newException(
+        RuntimeError,
+        "error at " & $res.get.pos & " token. " & res.get.getVal
+      )
   else:
     raise newException(RuntimeError, "Runtime error")
