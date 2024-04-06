@@ -62,6 +62,9 @@ type
     isConst*: bool
     isAssign*: bool
     assignOp*: string
+  IncDecStmt* = ref object of Stmt
+    op*: string
+    expr*: ASTRoot
   
   EnvVar* = ref object
     val*: ASTExpr
@@ -88,6 +91,7 @@ method `$`*(ast: IntAST): string = "IntAST(" & $ast.val & ")"
 method `$`*(ast: FloatAST): string = "FloatAST(" & $ast.val & ")"
 method `$`*(ast: StringAST): string = "StringAST(" & $ast.val & ")"
 method `$`*(ast: BoolAST): string = "BoolAST(" & $ast.val & ")"
+method `$`*(ast: VarAST): string = "VarAST(" & ast.name & ")"
 method `$`*(ast: EofStmt): string = "EOFStmt()"
 
 
@@ -115,6 +119,9 @@ proc boolAst*(val: bool): BoolAST = BoolAST(val: val, kind: akBool)
 proc unaryOpAst*(expr: ASTRoot, op: string): UnaryOpAST =
   UnaryOpAST(expr: expr, op: op)
 
+proc incDecStmt*(expr: ASTRoot, op: string): IncDecStmt =
+  IncDecStmt(expr: expr, op: op)
+
 proc varAst*(val: string): VarAST = VarAST(name: val, kind: akVar)
 
 proc binOpAst*(l, r: ASTRoot, op: string): BinOpAST = BinOpAST(l: l, r: r, op: op, kind: akBinOp)
@@ -122,8 +129,8 @@ proc binOpAst*(l, r: ASTRoot, op: string): BinOpAST = BinOpAST(l: l, r: r, op: o
 proc statementList*(stmts: seq[ASTRoot]): StmtList = StmtList(statements: stmts, kind: akStmtList)
 
 proc assignStmtAst*(name: string, expr: ASTRoot,
-                isConst: bool = false, isAssign: bool = false,
-                assignOp: string = "="): AssignStmt =
+                    isConst: bool = false, isAssign: bool = false,
+                    assignOp: string = "="): AssignStmt =
   AssignStmt(
     name: name, expr: expr, isConst: isConst,
     isAssign: isAssign, assignOp: assignOp,
@@ -246,6 +253,31 @@ method eval*(self: UnaryOpAST, env: Environment): ASTRoot =
     return val
   raise newException(RuntimeError, "Can not to apply unary operator '" & self.op & "' to " & $self.expr)
 
+method eval*(self: IncDecStmt, env: Environment): ASTRoot =
+  let val = self.expr.eval(env)
+  case self.op:
+    of "++":
+      if val.kind == akInt:
+        val.IntAST.val = val.IntAST.val + 1
+        return val
+      elif val.kind == akFloat:
+        val.FloatAST.val = val.FloatAST.val + 1f
+        return val
+      raise newException(RuntimeError, "Can not increase " & $self.expr)
+    of "--":
+      if val.kind == akInt:
+        val.IntAST.val = val.IntAST.val - 1
+        return val
+      elif val.kind == akFloat:
+        val.FloatAST.val = val.FloatAST.val - 1f
+        return val
+      elif val.kind == akString:
+        val.StringAST.val = val.StringAST.val[0..^2]
+        return val
+      raise newException(RuntimeError, "Can not decrease " & $self.expr)
+    else:
+      raise newException(RuntimeError, "Unknown inc/dec operator '" & self.op & "' for " & $self.expr)
+
 method eval*(self: StmtList, env: Environment): ASTRoot =
   var environment = newEnv(env)
   for s in self.statements:
@@ -272,10 +304,14 @@ method eval(self: BinOpAST, env: Environment): ASTRoot =
 
 method eval*(self: AssignStmt, env: Environment): ASTRoot =
   if self.isAssign and self.assignOp == "=":
+    # var x = y
+    # const x = y
     if env.vars.hasKey(self.name):
       raise newException(RuntimeError, "Variable " & self.name & " was assigned before")
     env.vars[self.name] = EnvVar(val: self.expr.eval(env).ASTExpr, isConst: self.isConst)
   elif self.isAssign:
+    # x += y
+    # x //= 2
     if not env.vars.hasKey(self.name):
       raise newException(RuntimeError, "Variable " & self.name & " was not assigned before")
     if env.vars[self.name].isConst:
@@ -284,6 +320,7 @@ method eval*(self: AssignStmt, env: Environment): ASTRoot =
       env.vars[self.name].val, self.expr, self.assignOp[0..^2]
     ).eval(env).ASTExpr
   elif not self.isAssign:
+    # x = y
     if not env.vars.hasKey(self.name):
       raise newException(RuntimeError, "Variable " & self.name & " was not assigned before")
     if env.vars[self.name].isConst:

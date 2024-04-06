@@ -89,9 +89,9 @@ proc aExprGroup(): Combinator =
 
 proc aExprTerm(): Combinator =
   (
+    unaryOperatorStmt() |
     aExprValue() |
-    aExprGroup() |
-    unaryOperatorStmt()
+    aExprGroup()
   )
 
 proc processBinOp(res: Result): Option[Result] =
@@ -139,7 +139,7 @@ proc assignConstStmt(): Combinator =
   (keyword("const") + idTag + operator("=") + expr()) ^ processAssignConstStmt
 
 proc processReAssignStmt(res: Result): Option[Result] =
-  astRes(assignStmtAst(res.valx.valx.val.get, res.valy.ast, true, true, res.valx.valy.val.get))
+  astRes(assignStmtAst(res.valx.valx.val.get, res.valy.ast, false, false, res.valx.valy.val.get))
 proc reAssignStmt(): Combinator =
   # x = y
   (idTag + anyOpInList(assignOperators) + expr()) ^ processReAssignStmt
@@ -172,11 +172,10 @@ proc processEof(res: Result): Option[Result] =
 
 
 proc processUnaryOperatorStmt(res: Result): Option[Result] =
-  echo res
   astRes(unaryOpAst(res.valy.ast, res.valx.val.get))
 proc unaryOperatorStmt(): Combinator =
   # x = -x
-  (anyOpInList(unaryOperators) + lazy(aExpr)) ^ processUnaryOperatorStmt
+  (anyOpInList(unaryOperators) + (aExprValue() | aExprGroup())) ^ processUnaryOperatorStmt
 
 
 proc stmt(): Combinator =
