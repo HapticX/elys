@@ -88,16 +88,16 @@ proc exprGroup(): Combinator =
 proc processBExprNot(res: Result): Option[Result] =
   astRes(notAst(res.valy.ast))
 proc bExprNot(): Combinator =
-  ((operator("!") | operator("not")) + lazy(exprTerm)) ^ processBExprNot
+  ((operator("!") | operator("not")) + lazy(expr)) ^ processBExprNot
 
 
 proc exprTerm(): Combinator =
   (
+    exprGroup() |
     incDecStatement() |
     unaryOperatorStmt() |
     bExprNot() |
-    exprValue() |
-    exprGroup()
+    exprValue()
   )
 
 proc processBinOp(res: Result): Option[Result] =
@@ -183,16 +183,16 @@ proc unaryOperatorStmt(): Combinator =
 
 
 proc processIncDec(res: Result): Option[Result] =
-  if res.valx.val.get in incDecOperators:
-    astRes(incDecStmt(varAst(res.valy.val.get), res.valx.val.get))
+  if res.valx.kind == rkStr:
+    astRes(incDecStmt(res.valy.ast, res.valx.val.get))
   else:
-    astRes(incDecStmt(varAst(res.valx.val.get), res.valy.val.get))
+    astRes(incDecStmt(res.valx.ast, res.valy.val.get))
 proc incDecStatement(): Combinator =
   # x++
   # --x
   (
-    (anyOpInList(incDecOperators) + idTag) |
-    (idTag + anyOpInList(incDecOperators))
+    (anyOpInList(incDecOperators) + (idTag ^ processVar)) |
+    ((idTag ^ processVar) + anyOpInList(incDecOperators))
   ) ^ processIncDec
 
 

@@ -29,4 +29,5 @@ suite "Elys":
     x = true or false
     print x
     print x and y, x or y
+    print 2 + 2 * 2 == 6, (2 + 2) * 2 == 8
     """)

@@ -262,10 +262,10 @@ proc `==`*(a, b: ASTRoot): ASTRoot =
   if a.kind != b.kind:
     return boolAst(false)
   case a.kind:
-    of akInt: boolAst(a.IntAST == b.IntAST)
-    of akFloat: boolAst(a.FloatAST == b.FloatAST)
-    of akBool: boolAst(a.BoolAST == b.BoolAST)
-    of akString: boolAst(a.StringAST == b.StringAST)
+    of akInt: boolAst(a.IntAST.val == b.IntAST.val)
+    of akFloat: boolAst(a.FloatAST.val == b.FloatAST.val)
+    of akBool: boolAst(a.BoolAST.val == b.BoolAST.val)
+    of akString: boolAst(a.StringAST.val == b.StringAST.val)
     of akNull: boolAst(true)
     else: boolAst(a[] == b[])
 
