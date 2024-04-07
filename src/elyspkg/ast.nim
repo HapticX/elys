@@ -9,8 +9,7 @@ type
   ASTKind* {.size: sizeof(int8).} = enum
     akRoot,
     akExpr, akNull, akInt, akFloat, akBool, akString, akArr, akVar, akBinOp, akUnaryOp,
-    akTernary, akBracketExpr, akSliceExpr,
-    akBinOpExpr, akRelativeOp, akAnd, akOr, akIn, akNot,
+    akTernary, akBracketExpr, akSliceExpr, akNot,
     akEof,
     akStmt, akStmtList, akAssign, akPrint, akIncDec, akElifBranch, akElseBranch,
     akIfStmt, akBreak, akContinue, akWhile, akAssignBracket, akSwap
@@ -47,18 +46,7 @@ type
   TernaryOpAST* = ref object of ASTExpr
     first*, second*, third*: ASTRoot
     op1*, op2*: string
-  
-  BinOpExpr* = ref object of ASTRoot
-  RelativeOp* = ref object of BinOpExpr
-    op*: string
-    l*, r*: ASTRoot
-  AndOp* = ref object of BinOpExpr
-    l*, r*: ASTRoot
-  OrOp* = ref object of BinOpExpr
-    l*, r*: ASTRoot
-  InOp* = ref object of BinOpExpr
-    l*, r*: ASTRoot
-  NotOp* = ref object of BinOpExpr
+  NotOp* = ref object of ASTExpr
     expr*: ASTRoot
     
   Stmt* = ref object of ASTRoot
@@ -129,44 +117,47 @@ proc newEnv*(): Environment =
   Environment(vars: newTable[string, EnvVar](), lvl: 0, modules: @[])
 
 
-method `$`*(ast: ASTRoot): string {.base.} = "ASTRoot()"
-method `$`*(ast: ASTExpr): string = "ASTExpr()"
-method `$`*(ast: NullAST): string = "NullAST()"
-method `$`*(ast: IntAST): string = "IntAST(" & $ast.val & ")"
-method `$`*(ast: FloatAST): string = "FloatAST(" & $ast.val & ")"
-method `$`*(ast: StringAST): string = "StringAST(" & $ast.val & ")"
-method `$`*(ast: BoolAST): string = "BoolAST(" & $ast.val & ")"
-method `$`*(ast: BinOpAST): string = "BinOpAST(" & $ast.l & ", " & $ast.r & ", " & ast.op & ")"
-method `$`*(ast: VarAST): string = "VarAST(" & ast.name & ")"
-method `$`*(ast: NotOp): string = "NotOp(" & $ast.expr & ")"
-method `$`*(ast: AndOp): string = "AndOp(" & $ast.l & ", " & $ast.r & ")"
-method `$`*(ast: OrOp): string = "OrOp(" & $ast.l & ", " & $ast.r & ")"
-method `$`*(ast: InOp): string = "InOp(" & $ast.l & ", " & $ast.r & ")"
-method `$`*(ast: RelativeOp): string = "RelativeOp(" & $ast.l & ", " & $ast.r & ", " & ast.op & ")"
-method `$`*(ast: EofStmt): string = "EOFStmt()"
-method `$`*(ast: StmtList): string = "StmtList(" & ast.statements.join(", ") & ")"
-method `$`*(ast: IncDecStmt): string =
-  case ast.op:
-    of "++":
-      return "Increment(" & $ast.expr & ")"
-    of "--":
-      return "Decrement(" & $ast.expr & ")"
-method `$`*(ast: ElseBranchStmt): string = "ElseBranchStmt(" & $ast.body & ")"
-method `$`*(ast: ElifBranchStmt): string = "ElifBranchStmt(" & $ast.condition & ", " & $ast.body & ")"
-method `$`*(ast: IfStmt): string =
-  "IfStmt(" & $ast.condition & ", " & $ast.body &
-  ", [" & ast.elifArray.join(", ") & "], " &
-  $ast.elseBranch & ")"
-method `$`*(ast: WhileStmt): string = "WhileStmt(" & $ast.condition & ", " & $ast.body & ")"
-method `$`*(ast: BreakStmt): string = "BreakStmt()"
-method `$`*(ast: ContinueStmt): string = "ContinueStmt()"
-method `$`*(ast: ArrayAST): string = "ArrayAST(" & ast.val.join(", ") & ")"
-method `$`*(ast: BracketExprAST): string =
-  "BracketExprAST(" & $ast.expr & ", " & $ast.index & ", " & $ast.indexes & ")"
-method `$`*(ast: SliceExprAST): string =
-  "SliceExprAST(" & $ast.l & ast.op & $ast.r & ")"
-method `$`*(ast: SwapStmt): string =
-  "SwapStmt(" & $ast.l & ", " & $ast.r & " = " & $ast.toL & ", " & $ast.toR & ")"
+func `$`*(ast: ASTRoot): string =
+  case ast.kind:
+    of akNull: "NullAST()"
+    of akInt: "IntAST(" & $ast.IntAST.val & ")"
+    of akFloat: "FloatAST(" & $ast.FloatAST.val & ")"
+    of akString: "StringAST(" & $ast.StringAST.val & ")"
+    of akBool: "BoolAST(" & $ast.BoolAST.val & ")"
+    of akBinOp: "BinOpAST(" & $ast.BinOpAST.l & ", " & $ast.BinOpAST.r & ", " & ast.BinOpAST.op & ")"
+    of akVar: "VarAST(" & ast.VarAST.name & ")"
+    of akNot: "NotOp(" & $ast.NotOp.expr & ")"
+    of akEof: "EOFStmt()"
+    of akStmtList: "StmtList(" & ast.StmtList.statements.join(", ") & ")"
+    of akIncDec:
+      case ast.IncDecStmt.op:
+        of "++":
+          "Increment(" & $ast.IncDecStmt.expr & ")"
+        of "--":
+          "Decrement(" & $ast.IncDecStmt.expr & ")"
+        else:
+          ""
+    of akElseBranch: "ElseBranchStmt(" & $ast.ElseBranchStmt.body & ")"
+    of akElifBranch: "ElifBranchStmt(" & $ast.ElifBranchStmt.condition & ", " & $ast.ElifBranchStmt.body & ")"
+    of akIfStmt:
+      "IfStmt(" & $ast.IfStmt.condition & ", " & $ast.IfStmt.body &
+      ", [" & ast.IfStmt.elifArray.join(", ") & "], " &
+      $ast.IfStmt.elseBranch & ")"
+    of akWhile: "WhileStmt(" & $ast.WhileStmt.condition & ", " & $ast.WhileStmt.body & ")"
+    of akBreak: "BreakStmt()"
+    of akContinue: "ContinueStmt()"
+    of akArr: "ArrayAST(" & ast.ArrayAST.val.join(", ") & ")"
+    of akBracketExpr:
+      "BracketExprAST(" & $ast.BracketExprAST.expr & ", " &
+      $ast.BracketExprAST.index & ", " & $ast.BracketExprAST.indexes & ")"
+    of akSliceExpr:
+      "SliceExprAST(" & $ast.SliceExprAST.l & ast.SliceExprAST.op &
+      $ast.SliceExprAST.r & ")"
+    of akSwap:
+      "SwapStmt(" & $ast.SwapStmt.l & ", " & $ast.SwapStmt.r & " = " &
+      $ast.SwapStmt.toL & ", " & $ast.SwapStmt.toR & ")"
+    else:
+      "ASTRoot(kind: " & $ast.kind & ")"
 
 
 macro evalFor(t, body: untyped) =
@@ -182,81 +173,73 @@ macro evalFor(t, body: untyped) =
   )
 
 
-func nullAst*(): NullAST = NullAST(kind: akNull)
-func eofStmt*(): EofStmt = EofStmt(kind: akEof)
+template nullAst*(): NullAST = NullAST(kind: akNull)
+template eofStmt*(): EofStmt = EofStmt(kind: akEof)
 
-func intAst*(val: int): IntAST = IntAST(val: val, kind: akInt)
-func floatAst*(val: float): FloatAST = FloatAST(val: val, kind: akFloat)
-func stringAst*(val: string): StringAST = StringAST(val: val, kind: akString)
-func boolAst*(val: bool): BoolAST = BoolAST(val: val, kind: akBool)
+template intAst*(v: int): IntAST = IntAST(val: v, kind: akInt)
+template floatAst*(v: float): FloatAST = FloatAST(val: v, kind: akFloat)
+template stringAst*(v: string): StringAST = StringAST(val: v, kind: akString)
+template boolAst*(v: bool): BoolAST = BoolAST(val: v, kind: akBool)
 
-func arrAst*(val: seq[ASTRoot]): ArrayAST =
-  ArrayAST(val: val, kind: akArr)
+template arrAst*(v: seq[ASTRoot]): ArrayAST =
+  ArrayAST(val: v, kind: akArr)
 
-func bracket*(expr, index: ASTRoot, indexes: seq[ASTRoot]): BracketExprAST =
-  BracketExprAST(index: index, expr: expr, indexes: indexes, kind: akBracketExpr)
+template bracket*(e, i: ASTRoot, idxs: seq[ASTRoot]): BracketExprAST =
+  BracketExprAST(index: i, expr: e, indexes: idxs, kind: akBracketExpr)
 
-func slice*(l, r: ASTRoot, op: string): SliceExprAST =
-  SliceExprAST(l: l, r: r, op: op, kind: akSliceExpr)
+template slice*(left, right: ASTRoot, operator: string): SliceExprAST =
+  SliceExprAST(l: left, r: right, op: operator, kind: akSliceExpr)
 
-func unaryOpAst*(expr: ASTRoot, op: string): UnaryOpAST =
-  UnaryOpAST(kind: akUnaryOp, expr: expr, op: op)
+template unaryOpAst*(e: ASTRoot, o: string): UnaryOpAST =
+  UnaryOpAST(kind: akUnaryOp, expr: e, op: o)
 
-func incDecStmt*(expr: ASTRoot, op: string): IncDecStmt =
-  IncDecStmt(kind: akIncDec, expr: expr, op: op)
+template incDecStmt*(e: ASTRoot, o: string): IncDecStmt =
+  IncDecStmt(kind: akIncDec, expr: e, op: o)
 
-func varAst*(val: string): VarAST = VarAST(name: val, kind: akVar)
+template varAst*(v: string): VarAST = VarAST(name: v, kind: akVar)
 
-func binOpAst*(l, r: ASTRoot, op: string): BinOpAST =
-  BinOpAST(l: l, r: r, op: op, kind: akBinOp)
+template binOpAst*(left, right: ASTRoot, o: string): BinOpAST =
+  BinOpAST(l: left, r: right, op: o, kind: akBinOp)
 
-func relOp*(l, r: ASTRoot, op: string): RelativeOp =
-  RelativeOp(l: l, r: r, op: op, kind: akRelativeOp)
-func notAst*(expr: ASTRoot): NotOp =
-  NotOp(expr: expr, kind: akNot)
+template notAst*(e: ASTRoot): NotOp =
+  NotOp(expr: e, kind: akNot)
 
-func statementList*(stmts: seq[ASTRoot]): StmtList =
+template statementList*(stmts: seq[ASTRoot]): StmtList =
   StmtList(statements: stmts, kind: akStmtList)
 
-func assignStmtAst*(name: string, expr: ASTRoot,
-                    isConst: bool = false, isAssign: bool = false,
-                    assignOp: string = "="): AssignStmt =
+template assignStmtAst*(n: string, e: ASTRoot,
+                        isc: bool = false, isa: bool = false,
+                        aop: string = "="): AssignStmt =
   AssignStmt(
-    name: name, expr: expr, isConst: isConst,
-    isAssign: isAssign, assignOp: assignOp,
+    name: n, expr: e, isConst: isc,
+    isAssign: isa, assignOp: aop,
     kind: akAssign
   )
 
-func assignBracket*(expr: BracketExprAST, val: ASTRoot, op: string): AssignBracketStmt =
-  AssignBracketStmt(expr: expr, val: val, kind: akAssignBracket, op: op[1..^1])
+template assignBracket*(e: BracketExprAST, v: ASTRoot, o: string): AssignBracketStmt =
+  AssignBracketStmt(expr: e, val: v, kind: akAssignBracket, op: o[1..^1])
 
-func elifBranchStmt*(condition: ASTRoot, body: ASTRoot): ElifBranchStmt =
-  ElifBranchStmt(condition: condition, body: body, kind: akElifBranch)
+template elifBranchStmt*(c: ASTRoot, b: ASTRoot): ElifBranchStmt =
+  ElifBranchStmt(condition: c, body: b, kind: akElifBranch)
 
-func elseBranchStmt*(body: ASTRoot): ElseBranchStmt =
-  ElseBranchStmt(body: body, kind: akElseBranch)
+template elseBranchStmt*(b: ASTRoot): ElseBranchStmt =
+  ElseBranchStmt(body: b, kind: akElseBranch)
 
-func ifStmt*(condition: ASTRoot, body: ASTRoot,
-             elifArray: seq[ElifBranchStmt], elseBranch: Option[ElseBranchStmt]): IfStmt =
+template ifStmt*(c: ASTRoot, b: ASTRoot,
+                 earr: seq[ElifBranchStmt], eb: Option[ElseBranchStmt]): IfStmt =
   IfStmt(
-    condition: condition, body: body,
-    elifArray: elifArray, elseBranch: elseBranch,
+    condition: c, body: b,
+    elifArray: earr, elseBranch: eb,
     kind: akIfStmt
   )
 
-func whileStmt*(condition: ASTRoot, body: ASTRoot): WhileStmt =
+template whileStmt*(c: ASTRoot, b: ASTRoot): WhileStmt =
   WhileStmt(
-    condition: condition, body: body, kind: akWhile
+    condition: c, body: b, kind: akWhile
   )
 
-func swap*(l, r, toL, toR: ASTRoot): SwapStmt =
-  SwapStmt(l: l, r: r, toL: toL, toR: toR, kind: akSwap)
-
-func continueStmt*: ContinueStmt =
-  ContinueStmt(kind: akContinue)
-
-func breakStmt*: BreakStmt =
-  BreakStmt(kind: akBreak)
+template swap*(left, right, toLeft, toRight: ASTRoot): SwapStmt =
+  SwapStmt(l: left, r: right, toL: toLeft, toR: toRight, kind: akSwap)
 
 
 method eval*(self: ASTRoot, env: Environment): ASTRoot {.base.} = nullAst()

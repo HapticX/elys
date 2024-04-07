@@ -273,7 +273,7 @@ func ifStatement(): Combinator =
 
 func processEof(res: Result): Option[Result] =
   # \0
-  astRes(eofStmt())
+  astRes(EofStmt(kind: akEof))
 
 
 func processUnaryOperatorStmt(res: Result): Option[Result] =
@@ -313,13 +313,13 @@ func whileStatement(): Combinator =
 
 
 func processBreakStatement(res: Result): Option[Result] =
-  astRes(breakStmt())
+  astRes(BreakStmt(kind: akBreak))
 func breakStatement(): Combinator =
   keyword"break" ^ processBreakStatement
 
 
 func processContinueStatement(res: Result): Option[Result] =
-  astRes(continueStmt())
+  astRes(ContinueStmt(kind: akContinue))
 func continueStatement(): Combinator =
   keyword"continue" ^ processContinueStatement
 
