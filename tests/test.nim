@@ -137,3 +137,15 @@ suite "Elys":
       x
     }..]
     """)
+  
+  test "swap":
+    exec("""
+    var x = [1 2 3 4 5]
+    var y = [6 7 8 9 10]
+
+    print x, y
+    x, y = y, x
+    print x, y
+    x[0], y[0] = 100, 50
+    print x, y
+    """)

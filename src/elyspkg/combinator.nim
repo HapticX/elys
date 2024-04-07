@@ -53,6 +53,8 @@ type
     c*: Combinator
   Rep* = ref object of Combinator
     c*: Combinator
+  RepSep* = ref object of Combinator
+    c*, sep*: Combinator
   Process* = ref object of Combinator
     c*: Combinator
     f*: ProcessFunc
@@ -70,16 +72,17 @@ type
     data: seq[Result]
 
 
-proc reserved*(val: string, kind: TokenKind): Reserved = Reserved(tkn: Token(value: val, kind: kind))
-proc tag*(kind: TokenKind): Tag = Tag(kind: kind)
-proc concat*(l, r: Combinator): Concat = Concat(left: l, right: r)
-proc alt*(l, r: Combinator): Alt = Alt(left: l, right: r)
-proc opt*(c: Combinator): Opt = Opt(c: c)
-proc rep*(c: Combinator): Rep = Rep(c: c)
-proc process*(c: Combinator, f: ProcessFunc): Process = Process(c: c, f: f)
-proc exp*(c: Combinator, sep: Option[Combinator]): Exp = Exp(c: c, sep: sep)
-proc lazy*(c_func: LazyFunc): Lazy = Lazy(c: none[Combinator](), c_func: c_func)
-proc phrase*(c: Combinator): Phrase = Phrase(c: c)
+func reserved*(val: string, kind: TokenKind): Reserved = Reserved(tkn: Token(value: val, kind: kind))
+func tag*(kind: TokenKind): Tag = Tag(kind: kind)
+func concat*(l, r: Combinator): Concat = Concat(left: l, right: r)
+func alt*(l, r: Combinator): Alt = Alt(left: l, right: r)
+func opt*(c: Combinator): Opt = Opt(c: c)
+func rep*(c: Combinator): Rep = Rep(c: c)
+func repSep*(c, sep: Combinator): RepSep = RepSep(c: c, sep: sep)
+func process*(c: Combinator, f: ProcessFunc): Process = Process(c: c, f: f)
+func exp*(c: Combinator, sep: Option[Combinator]): Exp = Exp(c: c, sep: sep)
+func lazy*(c_func: LazyFunc): Lazy = Lazy(c: none[Combinator](), c_func: c_func)
+func phrase*(c: Combinator): Phrase = Phrase(c: c)
 
 
 method `$`*(c: Combinator): string {.base.} = "Combinator()"
@@ -89,22 +92,23 @@ method `$`*(c: Concat): string = "Concat(" & $c.left & ", " & $c.right & ")"
 method `$`*(c: Alt): string = "Alt(" & $c.left & ", " & $c.right & ")"
 method `$`*(c: Opt): string = "Opt(" & $c.c & ")"
 method `$`*(c: Rep): string = "Rep(" & $c.c & ")"
+method `$`*(c: RepSep): string = "RepSep(" & $c.c & ", " & $c.sep & ")"
 method `$`*(c: Process): string = "Process(" & $c.c & ", func)"
 method `$`*(c: Exp): string = "Exp(" & $c.c & ", " & $c.sep & ")"
 method `$`*(c: Lazy): string = "Lazy(" & $c.c & ", func)"
 method `$`*(c: Phrase): string = "Phrase(" & $c.c & ")"
 
 
-proc astRes*(ast: ASTRoot): Option[Result] =
+func astRes*(ast: ASTRoot): Option[Result] =
   Result(kind: rkAst, ast: ast).some
 
-proc fnRes*(function: ResultFunc): Option[Result] =
+func fnRes*(function: ResultFunc): Option[Result] =
   Result(
     kind: rkFun,
     valfn: function
   ).some
 
-proc getVal*(res: Result): string =
+func getVal*(res: Result): string =
   case res.kind:
     of rkStr:
       return $res.val
@@ -126,12 +130,12 @@ proc getVal*(res: Result): string =
     of rkAst:
       return $res.ast
 
-proc `$`*(res: Result): string =
+func `$`*(res: Result): string =
   "Result(" & res.getVal & ")"
 
 
 # --== AST ==-- #
-proc printAst*(data: seq[Result]): PrintStmt =
+func printAst*(data: seq[Result]): PrintStmt =
   PrintStmt(data: data, kind: akPrint)
 method `$`*(ast: PrintStmt): string = "PrintStmt(" & $ast.data & ")"
 method eval*(self: PrintStmt, env: Environment): ASTRoot =
@@ -154,15 +158,15 @@ template `()`(obj: Combinator, tokens: seq[Token], pos: int): untyped =
   obj.call(tokens, pos)
 
 
-proc `+`*(left, right: Combinator): Concat  {.inline.} =
+func `+`*(left, right: Combinator): Concat =
   Concat(left: left, right: right)
-proc `*`*(c: Combinator, sep: Option[Combinator]): Exp  {.inline.} =
+func `*`*(c: Combinator, sep: Option[Combinator]): Exp =
   Exp(c: c, sep: sep)
-proc `*`*(c: Combinator, sep: Combinator): Exp  {.inline.} =
+func `*`*(c: Combinator, sep: Combinator): Exp =
   Exp(c: c, sep: sep.some)
-proc `|`*(left, right: Combinator): Alt  {.inline.} =
+func `|`*(left, right: Combinator): Alt =
   Alt(left: left, right: right)
-proc `^`*(c: Combinator, f: ProcessFunc): Process  {.inline.} =
+func `^`*(c: Combinator, f: ProcessFunc): Process =
   Process(c: c, f: f)
 
 
@@ -209,6 +213,23 @@ method call*(c: Rep, tokens: seq[Token], pos: int): Option[Result] =
     arr.add res.get
     i = res.get.pos
     res = c.c(tokens, i)
+  Result(kind: rkArr, arr: arr, pos: i).some
+
+method call*(c: RepSep, tokens: seq[Token], pos: int): Option[Result] =
+  var
+    res = c.c(tokens, pos)
+    arr: seq[Result] = @[]
+    i = pos
+    sep: Option[Result]
+  while res.isSome:
+    arr.add res.get
+    i = res.get.pos
+    sep = c.sep(tokens, i)
+    if sep.isSome:
+      i = sep.get.pos
+      res = c.c(tokens, i)
+    else:
+      break
   Result(kind: rkArr, arr: arr, pos: i).some
 
 method call*(c: Process, tokens: seq[Token], pos: int): Option[Result] =

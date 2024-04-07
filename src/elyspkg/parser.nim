@@ -7,11 +7,11 @@ import
   options
 
 
-proc keyword*(value: string): Reserved = reserved(value, TokenKind.tkKeyword)
-proc operator*(value: string): Reserved = reserved(value, TokenKind.tkOp)
+func keyword*(value: string): Reserved = reserved(value, TokenKind.tkKeyword)
+func operator*(value: string): Reserved = reserved(value, TokenKind.tkOp)
 
 
-proc processBool*(res: Result): Option[Result] =
+func processBool*(res: Result): Option[Result] =
   case res.val.get:
     of "on", "true":
       return Result(kind: rkBool, valb: true).some
@@ -21,30 +21,21 @@ proc processBool*(res: Result): Option[Result] =
       raise newException(ValueError, "unknown boolean value " & res.getVal)
 
 
-proc processInt*(res: Result): Option[Result] =
-  return Result(kind: rkInt, vali: res.val.get.parseInt).some
+func processInt*(res: Result): Option[Result] =
+  Result(kind: rkInt, vali: res.val.get.parseInt).some
+func processFloat*(res: Result): Option[Result] =
+  Result(kind: rkFloat, valf: res.val.get.parseFloat).some
+func processNull*(res: Result): Option[Result] =
+  astRes(nullAst())
+func processString*(res: Result): Option[Result] =
+  astRes(stringAst(res.val.get()[1..^2]))
 
 
-proc processFloat*(res: Result): Option[Result] =
-  return Result(kind: rkFloat, valf: res.val.get.parseFloat).some
+func idTag(): Combinator =
+  tag(TokenKind.tkId)
 
-
-proc processNull*(res: Result): Option[Result] =
-  return astRes(nullAst())
-
-
-proc processString*(res: Result): Option[Result] =
-  return astRes(stringAst(res.val.get()[1..^2]))
-
-
-let
-  idTag = tag(TokenKind.tkId)
-  intNumber = tag(TokenKind.tkInt) ^ processInt
-  floatNumber = tag(TokenKind.tkFloat) ^ processFloat
-  boolean = tag(TokenKind.tkBool) ^ processBool
-  null = keyword("null") ^ processNull
-  str = tag(TokenKind.tkString) ^ processString
-  exprPrecedenceLevels = @[
+func exprPrecedenceLevels(): seq[seq[string]] =
+  @[
     @["*", "/", "//"],
     @["+", "-", "%"],
     @["and", "&&"],
@@ -52,55 +43,58 @@ let
     @["in"],
     @["==", "!=", ">=", "<=", "<", ">"]
   ]
-  incDecOperators = @["--", "++"]
-  unaryOperators = @["-"]
-  assignOperators = @["//=", "+=", "-=", "*=", "/=", "="]
+func incDecOperators(): seq[string] =
+  @["--", "++"]
+func unaryOperators(): seq[string] =
+  @["-"]
+func assignOperators(): seq[string] =
+  @["//=", "+=", "-=", "*=", "/=", "="]
 
 
-proc processIntNumber(res: Result): Option[Result] = astRes(intAst(res.vali))
-proc processFloatNumber(res: Result): Option[Result] = astRes(floatAst(res.valf))
-proc processBoolean(res: Result): Option[Result] = astRes(boolAst(res.valb))
-proc processVar(res: Result): Option[Result] = astRes(varAst(res.val.get))
-proc processGroup(res: Result): Option[Result] = res.valx.valy.some
+func processIntNumber(res: Result): Option[Result] = astRes(intAst(res.vali))
+func processFloatNumber(res: Result): Option[Result] = astRes(floatAst(res.valf))
+func processBoolean(res: Result): Option[Result] = astRes(boolAst(res.valb))
+func processVar(res: Result): Option[Result] = astRes(varAst(res.val.get))
+func processGroup(res: Result): Option[Result] = res.valx.valy.some
 
 
-proc exprValue(): Combinator =
+func exprValue(): Combinator =
   (
-    (intNumber ^ processIntNumber) |
-    (floatNumber ^ processFloatNumber) |
-    (idTag ^ processVar) |
-    (boolean ^ processBoolean) |
-    str |
-    null
+    ((tag(TokenKind.tkInt) ^ processInt) ^ processIntNumber) |
+    ((tag(TokenKind.tkFloat) ^ processFloat) ^ processFloatNumber) |
+    (idTag() ^ processVar) |
+    ((tag(TokenKind.tkBool) ^ processBool) ^ processBoolean) |
+    (tag(TokenKind.tkString) ^ processString) |
+    (keyword("null") ^ processNull)
   )
 
 
-proc expr(): Combinator
-proc exprTerm(): Combinator
-proc exprTermPre(): Combinator
-proc incDecStatement(): Combinator
-proc unaryOperatorStmt(): Combinator
-proc stmtList(): Combinator
-proc ifStatement(): Combinator
-proc stmtListEmbed(): Combinator
+func expr(): Combinator
+func exprTerm(): Combinator
+func exprTermPre(): Combinator
+func incDecStatement(): Combinator
+func unaryOperatorStmt(): Combinator
+func stmtList(): Combinator
+func ifStatement(): Combinator
+func stmtListEmbed(): Combinator
 
 
-proc exprGroup(): Combinator =
+func exprGroup(): Combinator =
   (operator"(" + lazy(expr) + operator")") ^ processGroup
 
 
-proc processBExprNot(res: Result): Option[Result] =
+func processBExprNot(res: Result): Option[Result] =
   astRes(notAst(res.valy.ast))
-proc bExprNot(): Combinator =
+func bExprNot(): Combinator =
   ((operator"!" | operator"not") + lazy(expr)) ^ processBExprNot
 
 
-proc processExprArray(res: Result): Option[Result] =
+func processExprArray(res: Result): Option[Result] =
   var arr: seq[ASTRoot] = @[]
   for i in res.arr:
     arr.add i.valx.ast
   astRes(arrAst(arr))
-proc exprArray(): Combinator =
+func exprArray(): Combinator =
   (
     (
       operator"[" + rep(
@@ -110,26 +104,26 @@ proc exprArray(): Combinator =
   ) ^ processExprArray
 
 
-proc processBracketExpr(res: Result): Option[Result] =
+func processBracketExpr(res: Result): Option[Result] =
   var arr: seq[ASTRoot] = @[]
   for i in res.valy.arr:
     arr.add i.ast
   astRes(bracket(res.valx.valx.ast, res.valx.valy.ast, arr))
-proc bracketExpr(): Combinator =
+func bracketExpr(): Combinator =
   (
     lazy(exprTermPre) + ((operator"[" + lazy(expr) + operator"]") ^ processGroup) +
     rep(((operator"[" + lazy(expr) + operator"]") ^ processGroup))
   ) ^ processBracketExpr
 
 
-proc processSliceExpr(res: Result): Option[Result] =
+func processSliceExpr(res: Result): Option[Result] =
   if res.valx.kind == rkStr:
     astRes(slice(intAst(0), res.valy.ast, res.valx.val.get))
   elif res.valy.kind == rkStr:
     astRes(slice(res.valx.ast, intAst(-1), res.valy.val.get))
   else:
     astRes(slice(res.valx.valx.ast, res.valy.ast, res.valx.valy.val.get))
-proc sliceExpr(): Combinator =
+func sliceExpr(): Combinator =
   (
     alt(
       (operator"..") + lazy(exprTermPre),
@@ -141,7 +135,7 @@ proc sliceExpr(): Combinator =
   ) ^ processSliceExpr
 
 
-proc exprTermPre(): Combinator =
+func exprTermPre(): Combinator =
   (
     exprGroup() |
     lazy(ifStatement) |
@@ -154,14 +148,14 @@ proc exprTermPre(): Combinator =
   )
 
 
-proc exprTerm(): Combinator =
+func exprTerm(): Combinator =
   (
     lazy(bracketExpr) |
     lazy(sliceExpr) |
     exprTermPre()
   )
 
-proc processBinOp(res: Result): Option[Result] =
+func processBinOp(res: Result): Option[Result] =
   Result(
     kind: rkFun,
     valfn: proc(r: Result): Option[Result] =
@@ -169,75 +163,75 @@ proc processBinOp(res: Result): Option[Result] =
   ).some
 
 
-proc anyOpInList(operators: seq[string]): Combinator =
+func anyOpInList(operators: seq[string]): Combinator =
   var opParsers: seq[Combinator] = @[]
   for op in operators:
     opParsers.add(operator(op))
   foldl(opParsers, a | b)
 
 
-proc precedence(c: Combinator, levels: seq[seq[string]], combine: ProcessFunc): Combinator =
+func precedence(c: Combinator, levels: seq[seq[string]], combine: ProcessFunc): Combinator =
   result = c * (anyOpInList(levels[0]) ^ combine)
   for lvl in levels[1..^1]:
     result = result * (anyOpInList(lvl) ^ combine)
 
 
-proc expr(): Combinator =
-  precedence(exprTerm(), exprPrecedenceLevels, processBinOp)
+func expr(): Combinator =
+  precedence(exprTerm(), exprPrecedenceLevels(), processBinOp)
 
 
 # ---=== Statements ===--- #
 
-proc processAssignStmt(res: Result): Option[Result] =
+func processAssignStmt(res: Result): Option[Result] =
   astRes(assignStmtAst(res.valx.valx.valy.val.get, res.valy.ast, false, true))
-proc assignStmt(): Combinator =
+func assignStmt(): Combinator =
   # var x = 12300
-  (keyword"var" + idTag + operator"=" + expr()) ^ processAssignStmt
+  (keyword"var" + idTag() + operator"=" + expr()) ^ processAssignStmt
 
-proc processAssignConstStmt(res: Result): Option[Result] =
+func processAssignConstStmt(res: Result): Option[Result] =
   astRes(assignStmtAst(res.valx.valx.valy.val.get, res.valy.ast, true, true))
-proc assignConstStmt(): Combinator =
+func assignConstStmt(): Combinator =
   # const x = 100
-  (keyword"const" + idTag + operator"=" + expr()) ^ processAssignConstStmt
+  (keyword"const" + idTag() + operator"=" + expr()) ^ processAssignConstStmt
 
-proc processReAssignStmt(res: Result): Option[Result] =
+func processReAssignStmt(res: Result): Option[Result] =
   astRes(assignStmtAst(res.valx.valx.val.get, res.valy.ast, false, false, res.valx.valy.val.get))
-proc reAssignStmt(): Combinator =
+func reAssignStmt(): Combinator =
   # x = y
-  (idTag + anyOpInList(assignOperators) + expr()) ^ processReAssignStmt
+  (idTag() + anyOpInList(assignOperators()) + expr()) ^ processReAssignStmt
 
-proc processAssignBracketStmt(res: Result): Option[Result] =
+func processAssignBracketStmt(res: Result): Option[Result] =
   astRes(assignBracket(res.valx.valx.ast.BracketExprAST, res.valy.ast, res.valx.valy.val.get))
-proc assignBracketStmt(): Combinator =
+func assignBracketStmt(): Combinator =
   # x[z] = y
-  (bracketExpr() + anyOpInList(assignOperators) + expr()) ^ processAssignBracketStmt
+  (bracketExpr() + anyOpInList(assignOperators()) + expr()) ^ processAssignBracketStmt
 
-proc every(res: Result): Option[Result] =
+func every(res: Result): Option[Result] =
   res.arr[0].valx.some
 
-proc everyExpr(res: Result): Option[Result] =
+func everyExpr(res: Result): Option[Result] =
   res.valx.some
 
 
-proc processPrint(res: Result): Option[Result] =
+func processPrint(res: Result): Option[Result] =
   var arr: seq[Result] = @[]
   for i in res.valy.arr:
     arr.add i
   astRes(printAst(arr))
-proc printStmt(): Combinator =
+func printStmt(): Combinator =
   # print(x)
   # print x
   # print x, y, z
   (
     keyword"print" + alt(
       (operator"(" + opt(
-          rep((expr() + opt(operator",")) ^ everyExpr)) + operator")") ^ processGroup,
-      opt(rep((expr() + opt(operator",")) ^ everyExpr)),
+          repSep(expr(), operator",")) + operator")") ^ processGroup,
+      opt(repSep(expr(), operator",")),
     )
   ) ^ processPrint
 
 
-proc processIfStmt(res: Result): Option[Result] =
+func processIfStmt(res: Result): Option[Result] =
   let
     conditionIf = res.valx.valx.valx.valy
     bodyIf = res.valx.valx.valy
@@ -254,7 +248,7 @@ proc processIfStmt(res: Result): Option[Result] =
     else:
       elseBranchStmt(elseBranch.valy.ast).some
   ))
-proc ifStatement(): Combinator =
+func ifStatement(): Combinator =
   # if cond {
   #   body
   # } elif cond {
@@ -277,39 +271,39 @@ proc ifStatement(): Combinator =
   ) ^ processIfStmt
 
 
-proc processEof(res: Result): Option[Result] =
+func processEof(res: Result): Option[Result] =
   # \0
   astRes(eofStmt())
 
 
-proc processUnaryOperatorStmt(res: Result): Option[Result] =
+func processUnaryOperatorStmt(res: Result): Option[Result] =
   astRes(unaryOpAst(res.valy.ast, res.valx.val.get))
-proc unaryOperatorStmt(): Combinator =
+func unaryOperatorStmt(): Combinator =
   # -x
-  (anyOpInList(unaryOperators) + (exprValue() | exprGroup())) ^ processUnaryOperatorStmt
+  (anyOpInList(unaryOperators()) + (exprValue() | exprGroup())) ^ processUnaryOperatorStmt
 
 
-proc processIncDec(res: Result): Option[Result] =
+func processIncDec(res: Result): Option[Result] =
   if res.valx.kind == rkStr:
     astRes(incDecStmt(res.valy.ast, res.valx.val.get))
   else:
     astRes(incDecStmt(res.valx.ast, res.valy.val.get))
-proc incDecStatement(): Combinator =
+func incDecStatement(): Combinator =
   # x++
   # --x
   (
-    (anyOpInList(incDecOperators) + (idTag ^ processVar)) |
-    ((idTag ^ processVar) + anyOpInList(incDecOperators))
+    (anyOpInList(incDecOperators()) + (idTag() ^ processVar)) |
+    ((idTag() ^ processVar) + anyOpInList(incDecOperators()))
   ) ^ processIncDec
 
 
-proc stmtListEmbed(): Combinator =
+func stmtListEmbed(): Combinator =
   (operator"{" + opt(lazy(stmtList)) + operator"}") ^ processGroup
 
 
-proc processWhileStatement(res: Result): Option[Result] =
+func processWhileStatement(res: Result): Option[Result] =
   astRes(whileStmt(res.valx.valy.ast, res.valy.ast))
-proc whileStatement(): Combinator =
+func whileStatement(): Combinator =
   (
     keyword"while" + alt(
       (operator"(" + expr() + operator")") ^ processGroup,
@@ -318,22 +312,37 @@ proc whileStatement(): Combinator =
   ) ^ processWhileStatement
 
 
-proc processBreakStatement(res: Result): Option[Result] =
+func processBreakStatement(res: Result): Option[Result] =
   astRes(breakStmt())
-proc breakStatement(): Combinator =
+func breakStatement(): Combinator =
   keyword"break" ^ processBreakStatement
 
 
-proc processContinueStatement(res: Result): Option[Result] =
+func processContinueStatement(res: Result): Option[Result] =
   astRes(continueStmt())
-proc continueStatement(): Combinator =
+func continueStatement(): Combinator =
   keyword"continue" ^ processContinueStatement
 
 
-proc stmt(): Combinator =
+func processSwapStatement(res: Result): Option[Result] =
+  astRes(swap(
+    res.valx.valx.valx.valx.valx.valx.ast,
+    res.valx.valx.valx.valx.valy.ast,
+    res.valx.valx.valy.ast,
+    res.valy.ast
+  ))
+func swapStatement(): Combinator =
+  let expression = bracketExpr() | (idTag() ^ processVar)
+  (
+    expression + operator"," + expression + operator"=" + expr() + operator"," + expr()
+  ) ^ processSwapStatement
+
+
+func stmt(): Combinator =
   (
     ifStatement() |
     whileStatement() |
+    swapStatement() |
     printStmt() |
     assignBracketStmt() |
     assignStmt() |
@@ -347,18 +356,18 @@ proc stmt(): Combinator =
   )
 
 
-proc processStmtList(res: Result): Option[Result] =
+func processStmtList(res: Result): Option[Result] =
   var asts: seq[ASTRoot] = @[]
   for i in res.arr:
     asts.add(i.valx.ast)
   astRes(statementList(asts))
 
 
-proc stmtList(): Combinator =
+func stmtList(): Combinator =
   result = (
     rep(lazy(stmt) + opt(operator(";")))
   ) ^ processStmtList
 
 
-proc elysParser*(tokens: seq[Token]): auto =
+func elysParser*(tokens: seq[Token]): auto =
   phrase(stmtList()).call(tokens, 0)

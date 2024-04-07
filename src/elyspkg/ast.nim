@@ -13,7 +13,7 @@ type
     akBinOpExpr, akRelativeOp, akAnd, akOr, akIn, akNot,
     akEof,
     akStmt, akStmtList, akAssign, akPrint, akIncDec, akElifBranch, akElseBranch,
-    akIfStmt, akBreak, akContinue, akWhile, akAssignBracket
+    akIfStmt, akBreak, akContinue, akWhile, akAssignBracket, akSwap
   ASTRoot* = ref object of RootObj
     kind*: ASTKind
 
@@ -92,6 +92,9 @@ type
   WhileStmt* = ref object of Stmt
     body*: ASTRoot
     condition*: ASTRoot
+  SwapStmt* = ref object of Stmt
+    l*, r*: ASTRoot
+    toL*, toR*: ASTRoot
   ContinueStmt* = ref object of Stmt
   BreakStmt* = ref object of Stmt
   
@@ -162,6 +165,8 @@ method `$`*(ast: BracketExprAST): string =
   "BracketExprAST(" & $ast.expr & ", " & $ast.index & ", " & $ast.indexes & ")"
 method `$`*(ast: SliceExprAST): string =
   "SliceExprAST(" & $ast.l & ast.op & $ast.r & ")"
+method `$`*(ast: SwapStmt): string =
+  "SwapStmt(" & $ast.l & ", " & $ast.r & " = " & $ast.toL & ", " & $ast.toR & ")"
 
 
 macro evalFor(t, body: untyped) =
@@ -177,43 +182,43 @@ macro evalFor(t, body: untyped) =
   )
 
 
-proc nullAst*(): NullAST = NullAST(kind: akNull)
-proc eofStmt*(): EofStmt = EofStmt(kind: akEof)
+func nullAst*(): NullAST = NullAST(kind: akNull)
+func eofStmt*(): EofStmt = EofStmt(kind: akEof)
 
-proc intAst*(val: int): IntAST = IntAST(val: val, kind: akInt)
-proc floatAst*(val: float): FloatAST = FloatAST(val: val, kind: akFloat)
-proc stringAst*(val: string): StringAST = StringAST(val: val, kind: akString)
-proc boolAst*(val: bool): BoolAST = BoolAST(val: val, kind: akBool)
+func intAst*(val: int): IntAST = IntAST(val: val, kind: akInt)
+func floatAst*(val: float): FloatAST = FloatAST(val: val, kind: akFloat)
+func stringAst*(val: string): StringAST = StringAST(val: val, kind: akString)
+func boolAst*(val: bool): BoolAST = BoolAST(val: val, kind: akBool)
 
-proc arrAst*(val: seq[ASTRoot]): ArrayAST =
+func arrAst*(val: seq[ASTRoot]): ArrayAST =
   ArrayAST(val: val, kind: akArr)
 
-proc bracket*(expr, index: ASTRoot, indexes: seq[ASTRoot]): BracketExprAST =
+func bracket*(expr, index: ASTRoot, indexes: seq[ASTRoot]): BracketExprAST =
   BracketExprAST(index: index, expr: expr, indexes: indexes, kind: akBracketExpr)
 
-proc slice*(l, r: ASTRoot, op: string): SliceExprAST =
+func slice*(l, r: ASTRoot, op: string): SliceExprAST =
   SliceExprAST(l: l, r: r, op: op, kind: akSliceExpr)
 
-proc unaryOpAst*(expr: ASTRoot, op: string): UnaryOpAST =
+func unaryOpAst*(expr: ASTRoot, op: string): UnaryOpAST =
   UnaryOpAST(kind: akUnaryOp, expr: expr, op: op)
 
-proc incDecStmt*(expr: ASTRoot, op: string): IncDecStmt =
+func incDecStmt*(expr: ASTRoot, op: string): IncDecStmt =
   IncDecStmt(kind: akIncDec, expr: expr, op: op)
 
-proc varAst*(val: string): VarAST = VarAST(name: val, kind: akVar)
+func varAst*(val: string): VarAST = VarAST(name: val, kind: akVar)
 
-proc binOpAst*(l, r: ASTRoot, op: string): BinOpAST =
+func binOpAst*(l, r: ASTRoot, op: string): BinOpAST =
   BinOpAST(l: l, r: r, op: op, kind: akBinOp)
 
-proc relOp*(l, r: ASTRoot, op: string): RelativeOp =
+func relOp*(l, r: ASTRoot, op: string): RelativeOp =
   RelativeOp(l: l, r: r, op: op, kind: akRelativeOp)
-proc notAst*(expr: ASTRoot): NotOp =
+func notAst*(expr: ASTRoot): NotOp =
   NotOp(expr: expr, kind: akNot)
 
-proc statementList*(stmts: seq[ASTRoot]): StmtList =
+func statementList*(stmts: seq[ASTRoot]): StmtList =
   StmtList(statements: stmts, kind: akStmtList)
 
-proc assignStmtAst*(name: string, expr: ASTRoot,
+func assignStmtAst*(name: string, expr: ASTRoot,
                     isConst: bool = false, isAssign: bool = false,
                     assignOp: string = "="): AssignStmt =
   AssignStmt(
@@ -222,16 +227,16 @@ proc assignStmtAst*(name: string, expr: ASTRoot,
     kind: akAssign
   )
 
-proc assignBracket*(expr: BracketExprAST, val: ASTRoot, op: string): AssignBracketStmt =
+func assignBracket*(expr: BracketExprAST, val: ASTRoot, op: string): AssignBracketStmt =
   AssignBracketStmt(expr: expr, val: val, kind: akAssignBracket, op: op[1..^1])
 
-proc elifBranchStmt*(condition: ASTRoot, body: ASTRoot): ElifBranchStmt =
+func elifBranchStmt*(condition: ASTRoot, body: ASTRoot): ElifBranchStmt =
   ElifBranchStmt(condition: condition, body: body, kind: akElifBranch)
 
-proc elseBranchStmt*(body: ASTRoot): ElseBranchStmt =
+func elseBranchStmt*(body: ASTRoot): ElseBranchStmt =
   ElseBranchStmt(body: body, kind: akElseBranch)
 
-proc ifStmt*(condition: ASTRoot, body: ASTRoot,
+func ifStmt*(condition: ASTRoot, body: ASTRoot,
              elifArray: seq[ElifBranchStmt], elseBranch: Option[ElseBranchStmt]): IfStmt =
   IfStmt(
     condition: condition, body: body,
@@ -239,22 +244,25 @@ proc ifStmt*(condition: ASTRoot, body: ASTRoot,
     kind: akIfStmt
   )
 
-proc whileStmt*(condition: ASTRoot, body: ASTRoot): WhileStmt =
+func whileStmt*(condition: ASTRoot, body: ASTRoot): WhileStmt =
   WhileStmt(
     condition: condition, body: body, kind: akWhile
   )
 
-proc continueStmt*: ContinueStmt =
+func swap*(l, r, toL, toR: ASTRoot): SwapStmt =
+  SwapStmt(l: l, r: r, toL: toL, toR: toR, kind: akSwap)
+
+func continueStmt*: ContinueStmt =
   ContinueStmt(kind: akContinue)
 
-proc breakStmt*: BreakStmt =
+func breakStmt*: BreakStmt =
   BreakStmt(kind: akBreak)
 
 
 method eval*(self: ASTRoot, env: Environment): ASTRoot {.base.} = nullAst()
 
 
-proc astName*(a: ASTRoot): string =
+func astName*(a: ASTRoot): string =
   case a.kind:
     of akInt: "int"
     of akFloat: "float"
@@ -266,7 +274,7 @@ proc astName*(a: ASTRoot): string =
     else: "object"
 
 
-proc astValue*(a: ASTRoot, env: Environment): string =
+func astValue*(a: ASTRoot, env: Environment): string =
   case a.kind:
     of akInt: $a.IntAST.val
     of akFloat: $a.FloatAST.val
@@ -290,7 +298,7 @@ proc astValue*(a: ASTRoot, env: Environment): string =
     else: "object"
 
 
-proc toBoolean*(a: ASTRoot, env: Environment): ASTRoot =
+func toBoolean*(a: ASTRoot, env: Environment): ASTRoot =
   case a.kind:
     of akBool:
       return a
@@ -308,7 +316,7 @@ proc toBoolean*(a: ASTRoot, env: Environment): ASTRoot =
       raise newException(RuntimeError, "Can not get boolean from " & $a.astValue(env))
 
 
-proc `+`(a, b: ASTRoot): ASTRoot =
+func `+`(a, b: ASTRoot): ASTRoot =
   if a.kind == akInt and b.kind == akInt:
     return intAst(a.IntAST.val + b.IntAST.val)
   elif a.kind == akInt and b.kind == akFloat:
@@ -323,7 +331,7 @@ proc `+`(a, b: ASTRoot): ASTRoot =
     raise newException(ValueError, "Cannot plus " & a.astName & " to " & b.astName)
 
 
-proc `-`(a, b: ASTRoot): ASTRoot =
+func `-`(a, b: ASTRoot): ASTRoot =
   if a.kind == akInt and b.kind == akInt:
     return intAst(a.IntAST.val - b.IntAST.val)
   elif a.kind == akInt and b.kind == akFloat:
@@ -336,7 +344,7 @@ proc `-`(a, b: ASTRoot): ASTRoot =
     raise newException(ValueError, "Cannot minus " & b.astName & " from " & a.astName)
 
 
-proc `*`*(a, b: ASTRoot): ASTRoot =
+func `*`*(a, b: ASTRoot): ASTRoot =
   if a.kind == akInt and b.kind == akInt:
     return intAst(a.IntAST.val * b.IntAST.val)
   elif a.kind == akInt and b.kind == akFloat:
@@ -351,7 +359,7 @@ proc `*`*(a, b: ASTRoot): ASTRoot =
     raise newException(ValueError, "Cannot multiply " & a.astName & " by " & b.astName)
 
 
-proc `/`*(a, b: ASTRoot): ASTRoot =
+func `/`*(a, b: ASTRoot): ASTRoot =
   if a.kind == akInt and b.kind == akInt:
     return floatAST(a.IntAST.val / b.IntAST.val)
   elif a.kind == akInt and b.kind == akFloat:
@@ -364,7 +372,7 @@ proc `/`*(a, b: ASTRoot): ASTRoot =
     raise newException(ValueError, "Cannot divide " & a.astName & " by " & b.astName)
 
 
-proc `//`*(a, b: ASTRoot): ASTRoot =
+func `//`*(a, b: ASTRoot): ASTRoot =
   if a.kind == akInt and b.kind == akInt:
     return intAST(a.IntAST.val div b.IntAST.val)
   elif a.kind == akInt and b.kind == akFloat:
@@ -373,14 +381,14 @@ proc `//`*(a, b: ASTRoot): ASTRoot =
     raise newException(ValueError, "Cannot divide " & a.astName & " by " & b.astName)
 
 
-proc `%`*(a, b: ASTRoot): ASTRoot =
+func `%`*(a, b: ASTRoot): ASTRoot =
   if a.kind == akInt and b.kind == akInt:
     return intAst(a.IntAST.val mod b.IntAST.val)
   else:
     raise newException(ValueError, "Cannot get mod of " & b.astName & " from " & a.astName)
 
 
-proc `==`*(a, b: ASTRoot): ASTRoot =
+func `==`*(a, b: ASTRoot): ASTRoot =
   if a.kind != b.kind:
     return boolAst(false)
   case a.kind:
@@ -392,11 +400,11 @@ proc `==`*(a, b: ASTRoot): ASTRoot =
     else: boolAst(a[] == b[])
 
 
-proc `!=`*(a, b: ASTRoot): ASTRoot =
+func `!=`*(a, b: ASTRoot): ASTRoot =
   boolAst(not (a == b).BoolAST.val)
 
 
-proc `>`*(a, b: ASTRoot): ASTRoot =
+func `>`*(a, b: ASTRoot): ASTRoot =
   if a.kind == akInt and b.kind == akInt:
     return boolAst(a.IntAST.val > b.IntAST.val)
   elif a.kind == akFloat and b.kind == akFloat:
@@ -410,35 +418,27 @@ proc `>`*(a, b: ASTRoot): ASTRoot =
   )
 
 
-proc `>=`*(a, b: ASTRoot): ASTRoot =
+func `>=`*(a, b: ASTRoot): ASTRoot =
   boolAst((a == b).BoolAST.val or (a > b).BoolAST.val)
 
 
-proc `<`*(a, b: ASTRoot): ASTRoot =
+func `<`*(a, b: ASTRoot): ASTRoot =
   boolAst(not (a >= b).BoolAST.val)
 
 
-proc `<=`*(a, b: ASTRoot): ASTRoot =
+func `<=`*(a, b: ASTRoot): ASTRoot =
   boolAst((a == b).BoolAST.val or (a < b).BoolAST.val)
 
 
-proc `and`*(a, b: ASTRoot): ASTRoot =
+func `and`*(a, b: ASTRoot): ASTRoot =
   boolAst(a.BoolAST.val and b.BoolAST.val)
 
 
-proc `or`*(a, b: ASTRoot): ASTRoot =
+func `or`*(a, b: ASTRoot): ASTRoot =
   boolAst(a.BoolAST.val or b.BoolAST.val)
 
 
-# proc `..`*(a, b: ASTRoot): ASTRoot =
-#   if a.kind != b.kind:
-#     raise newException(ValueError, "Can not slice with different types")
-#   case a.kind:
-#     of akInt:
-#       return slice(Slice())
-
-
-proc `[]`*(a, b: ASTRoot, env: Environment): ASTRoot =
+func `[]`*(a, b: ASTRoot, env: Environment): ASTRoot =
   if a.kind == akArr and b.kind == akInt:
     let idx = b.IntAST.val
     if idx < 0:
@@ -481,7 +481,7 @@ proc `[]`*(a, b: ASTRoot, env: Environment): ASTRoot =
   )
 
 
-proc `[]=`*(a, b: ASTRoot, env: Environment, val: ASTRoot) =
+func `[]=`*(a, b: ASTRoot, env: Environment, val: ASTRoot) =
   if a.kind == akArr and b.kind == akInt:
     let idx = b.IntAST.val
     if idx < 0:
@@ -701,3 +701,23 @@ method eval*(self: BreakStmt, env: Environment): ASTRoot =
 method eval*(self: ContinueStmt, env: Environment): ASTRoot =
   env.signal = sContinue
   return self
+
+method eval*(self: SwapStmt, env: Environment): ASTRoot =
+  if self.l.kind != self.r.kind or self.toL.kind != self.toR.kind:
+    raise newException(RuntimeError, "Can not swap different types")
+  case self.l.kind:
+    of akVar:
+      let
+        l = self.toL.eval(env)
+        r = self.toR.eval(env)
+      discard assignStmtAst(self.l.VarAST.name, l, false, false).eval(env)
+      discard assignStmtAst(self.r.VarAST.name, r, false, false).eval(env)
+    of akBracketExpr:
+      let
+        l = self.toL.eval(env)
+        r = self.toR.eval(env)
+      discard assignBracket(self.l.BracketExprAST, l, "=").eval(env)
+      discard assignBracket(self.r.BracketExprAST, r, "=").eval(env)
+    else:
+      raise newException(RuntimeError, "Can not swap this")
+  nullAst()

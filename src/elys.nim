@@ -10,7 +10,7 @@ when isMainModule:
     terminal
 
 
-proc exec*(code: string) =
+func compile(code: string): ASTRoot =
   let tokens = code.parseForTokens
   # echo tokens
   let parsed = tokens.elysParser
@@ -19,8 +19,12 @@ proc exec*(code: string) =
     discard parsed.get.ast.eval(env)
 
 
+func exec*(code: string): ASTRoot {.discardable, exportc.} =
+  compile(code)
+
+
 when isMainModule:
-  const VERSION = "0.3.0"
+  const VERSION = "0.4.0"
 
   styledEcho fgRed, "      _           "
   styledEcho fgRed, "  ___| |_   _ ___ "
