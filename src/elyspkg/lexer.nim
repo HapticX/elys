@@ -114,7 +114,7 @@ func parseForTokens*(source: string): seq[Token] =
     elif src.findRe(re2"^(\b(true|false|on|off)\b)", m):
       result.add tkn(src, m, i, tkBool)
     # Keywords
-    elif src.findRe(re2"^(\b(if|elif|else|while|for|case|of|var|const)\b)", m):
+    elif src.findRe(re2"^(\b(if|elif|else|while|for|case|of|var|const|continue|break)\b)", m):
       result.add tkn(src, m, i, tkKeyword)
     elif src.findRe(re2"^(\b(print|null)\b)", m):
       result.add tkn(src, m, i, tkKeyword)

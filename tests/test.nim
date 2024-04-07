@@ -4,17 +4,20 @@ import
 
 
 suite "Elys":
+
   test "Variables":
     exec("""
     # Here we just declare variables
     var x = 10
     var y = 20
     """)
+
   test "Basic math":
     exec("""
     print -5 + 10
     print 2 + 2 * 2 / -10 * .1
     """)
+
   test "increment / decrement":
     exec("""
     var x = 10
@@ -22,6 +25,7 @@ suite "Elys":
     print x++
     print ++x
     """)
+
   test "Basic bool operations":
     exec("""
     var x = true
@@ -31,6 +35,7 @@ suite "Elys":
     print x and y, x or y
     print 2 + 2 * 2 == 6, (2 + 2) * 2 == 8
     """)
+
   test "if-elif-else bool operations":
     exec("""
     if 0 {
@@ -57,4 +62,32 @@ suite "Elys":
 
     var x = if ("") {0} elif (true) {"hello"} else {.0}
     print x
+    """)
+  
+  test "embedded statements":
+    exec("""
+    var x = {
+      10
+    }
+    print x
+    """)
+  
+  test "while statement":
+    exec("""
+    var y = 0
+    print {
+      var x = 0
+      while x < 10 {
+        x++
+        if x % 2 == 0 {
+          y++
+          continue
+        }
+        if x == 7 {
+          break
+        }
+      }
+      x
+    }
+    print y
     """)

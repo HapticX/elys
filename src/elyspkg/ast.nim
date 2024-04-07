@@ -13,7 +13,7 @@ type
     akBinOpExpr, akRelativeOp, akAnd, akOr, akIn, akNot,
     akEof,
     akStmt, akStmtList, akAssign, akPrint, akIncDec, akElifBranch, akElseBranch,
-    akIfStmt
+    akIfStmt, akBreak, akContinue, akWhile
   ASTRoot* = ref object of RootObj
     kind*: ASTKind
 
@@ -58,6 +58,7 @@ type
   EofStmt* = ref object of Stmt
   StmtList* = ref object of Stmt
     statements*: seq[ASTRoot]
+    parent*: ASTKind
   AssignStmt* = ref object of Stmt
     name*: string
     expr*: ASTRoot
@@ -77,7 +78,16 @@ type
     body*: ASTRoot
     elifArray*: seq[ElifBranchStmt]
     elseBranch*: Option[ElseBranchStmt]
+  WhileStmt* = ref object of Stmt
+    body*: ASTRoot
+    condition*: ASTRoot
+  ContinueStmt* = ref object of Stmt
+  BreakStmt* = ref object of Stmt
   
+  SignalKind* {.size: sizeof(int8).} = enum
+    sNothing,
+    sBreak,
+    sContinue
   EnvVar* = ref object
     val*: ASTExpr
     isConst*: bool
@@ -85,6 +95,7 @@ type
     vars*: TableRef[string, EnvVar]
     lvl*: int
     modules*: seq[string]
+    signal*: SignalKind
   RuntimeError* = object of ValueError
 
 
@@ -111,11 +122,22 @@ method `$`*(ast: OrOp): string = "OrOp(" & $ast.l & ", " & $ast.r & ")"
 method `$`*(ast: InOp): string = "InOp(" & $ast.l & ", " & $ast.r & ")"
 method `$`*(ast: RelativeOp): string = "RelativeOp(" & $ast.l & ", " & $ast.r & ", " & ast.op & ")"
 method `$`*(ast: EofStmt): string = "EOFStmt()"
-method `$`*(ast: StmtList): string =
-  var res = ""
-  for i in ast.statements:
-    res.add $i
-  "StmtList(" & res & ")"
+method `$`*(ast: StmtList): string = "StmtList(" & ast.statements.join(", ") & ")"
+method `$`*(ast: IncDecStmt): string =
+  case ast.op:
+    of "++":
+      return "Increment(" & $ast.expr & ")"
+    of "--":
+      return "Decrement(" & $ast.expr & ")"
+method `$`*(ast: ElseBranchStmt): string = "ElseBranchStmt(" & $ast.body & ")"
+method `$`*(ast: ElifBranchStmt): string = "ElifBranchStmt(" & $ast.condition & ", " & $ast.body & ")"
+method `$`*(ast: IfStmt): string =
+  "IfStmt(" & $ast.condition & ", " & $ast.body &
+  ", [" & ast.elifArray.join(", ") & "], " &
+  $ast.elseBranch & ")"
+method `$`*(ast: WhileStmt): string = "WhileStmt(" & $ast.condition & ", " & $ast.body & ")"
+method `$`*(ast: BreakStmt): string = "BreakStmt()"
+method `$`*(ast: ContinueStmt): string = "ContinueStmt()"
 
 
 macro evalFor(t, body: untyped) =
@@ -180,6 +202,17 @@ proc ifStmt*(condition: ASTRoot, body: ASTRoot,
     elifArray: elifArray, elseBranch: elseBranch,
     kind: akIfStmt
   )
+
+proc whileStmt*(condition: ASTRoot, body: ASTRoot): WhileStmt =
+  WhileStmt(
+    condition: condition, body: body, kind: akWhile
+  )
+
+proc continueStmt*: ContinueStmt =
+  ContinueStmt(kind: akContinue)
+
+proc breakStmt*: BreakStmt =
+  BreakStmt(kind: akBreak)
 
 
 method eval*(self: ASTRoot, env: Environment): ASTRoot {.base.} = nullAst()
@@ -407,6 +440,10 @@ method eval*(self: StmtList, env: Environment): ASTRoot =
   var environment = newEnv(env)
   for s in self.statements:
     result = s.eval(environment)
+    env.signal = environment.signal
+    if env.signal in {sContinue, sBreak}:
+      break
+  return result
 
 method eval(self: BinOpAST, env: Environment): ASTRoot =
   let
@@ -473,11 +510,40 @@ method eval*(self: AssignStmt, env: Environment): ASTRoot =
 method eval*(self: IfStmt, env: Environment): ASTRoot =
   var cond = self.condition.eval(env)
   if cond.toBoolean(env).BoolAST.val:
+    self.body.StmtList.parent = akIfStmt
     return self.body.eval(env)
   if self.elifArray.len > 0:
     for i in self.elifArray:
       cond = i.condition.eval(env)
       if cond.toBoolean(env).BoolAST.val:
+        i.body.StmtList.parent = akIfStmt
         return i.body.eval(env)
   if self.elseBranch.isSome:
+    self.elseBranch.get.body.StmtList.parent = akIfStmt
     return self.elseBranch.get.body.eval(env)
+  return nullAst()
+
+
+method eval*(self: WhileStmt, env: Environment): ASTRoot =
+  var res: ASTRoot
+  self.body.StmtList.parent = akWhile
+  while self.condition.eval(env).BoolAST.val:
+    res = self.body.eval(env)
+    case env.signal:
+      of sContinue:
+        env.signal = sNothing
+        continue
+      of sBreak:
+        env.signal = sNothing
+        break
+      else:
+        discard
+  return nullAst()
+
+
+method eval*(self: BreakStmt, env: Environment): ASTRoot =
+  env.signal = sBreak
+  return self
+method eval*(self: ContinueStmt, env: Environment): ASTRoot =
+  env.signal = sContinue
+  return self

@@ -81,6 +81,7 @@ proc incDecStatement(): Combinator
 proc unaryOperatorStmt(): Combinator
 proc stmtList(): Combinator
 proc ifStatement(): Combinator
+proc stmtListEmbed(): Combinator
 
 
 proc exprGroup(): Combinator =
@@ -97,6 +98,7 @@ proc exprTerm(): Combinator =
   (
     exprGroup() |
     lazy(ifStatement) |
+    lazy(stmtListEmbed) |
     incDecStatement() |
     unaryOperatorStmt() |
     bExprNot() |
@@ -239,14 +241,44 @@ proc incDecStatement(): Combinator =
   ) ^ processIncDec
 
 
+proc stmtListEmbed(): Combinator =
+  (operator("{") + opt(lazy(stmtList)) + operator("}")) ^ processGroup
+
+
+proc processWhileStatement(res: Result): Option[Result] =
+  astRes(whileStmt(res.valx.valy.ast, res.valy.ast))
+proc whileStatement(): Combinator =
+  (
+    keyword("while") + alt(
+      (operator("(") + expr() + operator(")")) ^ processGroup,
+      expr(),
+    ) + (operator("{") + opt(lazy(stmtList)) + operator("}")) ^ processGroup
+  ) ^ processWhileStatement
+
+
+proc processBreakStatement(res: Result): Option[Result] =
+  astRes(breakStmt())
+proc breakStatement(): Combinator =
+  keyword("break") ^ processBreakStatement
+
+
+proc processContinueStatement(res: Result): Option[Result] =
+  astRes(continueStmt())
+proc continueStatement(): Combinator =
+  keyword("continue") ^ processContinueStatement
+
+
 proc stmt(): Combinator =
   (
     ifStatement() |
+    whileStatement() |
     printStmt() |
     assignStmt() |
     assignConstStmt() |
     reAssignStmt() |
     incDecStatement() |
+    breakStatement() |
+    continueStatement() |
     expr() |
     (tag(TokenKind.tkEof) ^ processEof)
   )
