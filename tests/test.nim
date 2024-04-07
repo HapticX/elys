@@ -31,3 +31,19 @@ suite "Elys":
     print x and y, x or y
     print 2 + 2 * 2 == 6, (2 + 2) * 2 == 8
     """)
+  test "if-elif-else bool operations":
+    exec("""
+    if 0 {
+      print "0!"
+    } elif (false) {
+      print "oops", false
+    } elif (false) {
+      print "oops", false
+    } else {
+      print "yeap"
+    }
+
+    if 2 + 2 * 2 == 6 {
+      print "yeap, 2 + 2 * 2 is 6"
+    }
+    """)

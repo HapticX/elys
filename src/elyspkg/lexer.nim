@@ -50,7 +50,7 @@ else:
 
 
 func parseString(source: string, symbol: char): Token =
-  result = Token(value: $symbol)
+  result = Token(value: $symbol, kind: tkString)
   var
     i = 0
     src = source[1..^1]

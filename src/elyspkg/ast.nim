@@ -1,7 +1,8 @@
 import
   macros,
   strutils,
-  tables
+  tables,
+  options
 
 
 type
@@ -11,7 +12,8 @@ type
     akTernary,
     akBinOpExpr, akRelativeOp, akAnd, akOr, akIn, akNot,
     akEof,
-    akStmt, akStmtList, akAssign, akPrint, akIncDec
+    akStmt, akStmtList, akAssign, akPrint, akIncDec, akElifBranch, akElseBranch,
+    akIfStmt
   ASTRoot* = ref object of RootObj
     kind*: ASTKind
 
@@ -65,6 +67,16 @@ type
   IncDecStmt* = ref object of Stmt
     op*: string
     expr*: ASTRoot
+  ElifBranchStmt* = ref object of Stmt
+    condition*: ASTRoot
+    body*: ASTRoot
+  ElseBranchStmt* = ref object of Stmt
+    body*: ASTRoot
+  IfStmt* = ref object of Stmt
+    condition*: ASTRoot
+    body*: ASTRoot
+    elifArray*: seq[ElifBranchStmt]
+    elseBranch*: Option[ElseBranchStmt]
   
   EnvVar* = ref object
     val*: ASTExpr
@@ -99,6 +111,11 @@ method `$`*(ast: OrOp): string = "OrOp(" & $ast.l & ", " & $ast.r & ")"
 method `$`*(ast: InOp): string = "InOp(" & $ast.l & ", " & $ast.r & ")"
 method `$`*(ast: RelativeOp): string = "RelativeOp(" & $ast.l & ", " & $ast.r & ", " & ast.op & ")"
 method `$`*(ast: EofStmt): string = "EOFStmt()"
+method `$`*(ast: StmtList): string =
+  var res = ""
+  for i in ast.statements:
+    res.add $i
+  "StmtList(" & res & ")"
 
 
 macro evalFor(t, body: untyped) =
@@ -150,6 +167,20 @@ proc assignStmtAst*(name: string, expr: ASTRoot,
     kind: akAssign
   )
 
+proc elifBranchStmt*(condition: ASTRoot, body: ASTRoot): ElifBranchStmt =
+  ElifBranchStmt(condition: condition, body: body, kind: akElifBranch)
+
+proc elseBranchStmt*(body: ASTRoot): ElseBranchStmt =
+  ElseBranchStmt(body: body, kind: akElseBranch)
+
+proc ifStmt*(condition: ASTRoot, body: ASTRoot,
+             elifArray: seq[ElifBranchStmt], elseBranch: Option[ElseBranchStmt]): IfStmt =
+  IfStmt(
+    condition: condition, body: body,
+    elifArray: elifArray, elseBranch: elseBranch,
+    kind: akIfStmt
+  )
+
 
 method eval*(self: ASTRoot, env: Environment): ASTRoot {.base.} = nullAst()
 
@@ -184,6 +215,24 @@ proc astValue*(a: ASTRoot, env: Environment): string =
         inc i
       "[" & res & "]"
     else: "object"
+
+
+proc toBoolean*(a: ASTRoot, env: Environment): ASTRoot =
+  case a.kind:
+    of akBool:
+      return a
+    of akInt:
+      return boolAst(a.IntAST.val != 0)
+    of akFloat:
+      return boolAst(a.FloatAST.val != 0.0)
+    of akString:
+      return boolAst(a.StringAST.val.len > 0)
+    of akArr:
+      return boolAst(a.ArrayAST.val.len > 0)
+    of akNull:
+      return boolAst(false)
+    else:
+      raise newException(RuntimeError, "Can not get boolean from " & $a.astValue(env))
 
 
 proc `+`(a, b: ASTRoot): ASTRoot =
@@ -357,7 +406,7 @@ method eval*(self: IncDecStmt, env: Environment): ASTRoot =
 method eval*(self: StmtList, env: Environment): ASTRoot =
   var environment = newEnv(env)
   for s in self.statements:
-    discard s.eval(environment)
+    result = s.eval(environment)
 
 method eval(self: BinOpAST, env: Environment): ASTRoot =
   let
@@ -419,3 +468,16 @@ method eval*(self: AssignStmt, env: Environment): ASTRoot =
       raise newException(RuntimeError, "Const " & self.name & " can not be modified")
     env.vars[self.name].val = self.expr.eval(env).ASTExpr
   nullAst()
+
+
+method eval*(self: IfStmt, env: Environment): ASTRoot =
+  var cond = self.condition.eval(env)
+  if cond.toBoolean(env).BoolAST.val:
+    return self.body.eval(env)
+  if self.elifArray.len > 0:
+    for i in self.elifArray:
+      cond = i.condition.eval(env)
+      if cond.toBoolean(env).BoolAST.val:
+        return i.body.eval(env)
+  if self.elseBranch.isSome:
+    return self.elseBranch.get.body.eval(env)

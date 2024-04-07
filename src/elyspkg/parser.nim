@@ -127,6 +127,8 @@ proc expr(): Combinator =
 
 # ---=== Statements ===--- #
 
+proc stmtList(): Combinator
+
 proc processAssignStmt(res: Result): Option[Result] =
   astRes(assignStmtAst(res.valx.valx.valy.val.get, res.valy.ast, false, true))
 proc assignStmt(): Combinator =
@@ -170,6 +172,46 @@ proc printStmt(): Combinator =
   ) ^ processPrint
 
 
+proc processIfStmt(res: Result): Option[Result] =
+  let
+    conditionIf = res.valx.valx.valx.valy
+    bodyIf = res.valx.valx.valy
+    elseBranch = res.valy
+  var elifBranches: seq[ElifBranchStmt] = @[]
+  for i in res.valx.valy.arr:
+    elifBranches.add(elifBranchStmt(i.valx.valy.ast, i.valy.ast))
+  astRes(ifStmt(
+    conditionIf.ast,
+    bodyIf.ast,
+    elifBranches,
+    if elseBranch.kind == rkStr:
+      none[ElseBranchStmt]()
+    else:
+      elseBranchStmt(elseBranch.valy.ast).some
+  ))
+proc ifStatement(): Combinator =
+  # if cond {
+  #   body
+  # } elif cond {
+  #   body
+  # } else {
+  #   body
+  # }
+  let
+    condition = alt(
+      (operator("(") + expr() + operator(")")) ^ processGroup,
+      expr(),
+    )
+    stmts = (operator("{") + opt(lazy(stmtList)) + operator("}")) ^ processGroup
+  (
+    keyword("if") + condition + stmts + rep(
+      keyword("elif") + condition + stmts
+    ) + opt(
+      keyword("else") + stmts
+    )
+  ) ^ processIfStmt
+
+
 proc processEof(res: Result): Option[Result] =
   # \0
   astRes(eofStmt())
@@ -198,6 +240,7 @@ proc incDecStatement(): Combinator =
 
 proc stmt(): Combinator =
   (
+    ifStatement() |
     printStmt() |
     assignStmt() |
     assignConstStmt() |
