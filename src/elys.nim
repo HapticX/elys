@@ -20,7 +20,7 @@ proc exec*(code: string) =
 
 
 when isMainModule:
-  const VERSION = "0.2.0"
+  const VERSION = "0.3.0"
 
   styledEcho fgRed, "      _           "
   styledEcho fgRed, "  ___| |_   _ ___ "

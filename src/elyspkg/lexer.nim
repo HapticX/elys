@@ -104,9 +104,9 @@ func parseForTokens*(source: string): seq[Token] =
     # Operators
     elif src.findRe(re2"^(>=|==|<=|!=|&&|\|\||\+\+|\-\-|//)", m):
       result.add tkn(src, m, i, tkOp)
-    elif src.findRe(re2"^(\+=|\-=|//=|/=|\*=|&=|@=|\$=|\^=|\?=|%=)", m):
+    elif src.findRe(re2"^(\+=|\-=|//=|/=|\*=|&=|@=|\$=|\^=|\?=|%=|\.\.<|\.\.)", m):
       result.add tkn(src, m, i, tkOp)
-    elif src.findRe(re2"^(\b(not|or|and|in)\b)", m):
+    elif src.findRe(re2"^(\b(not|or|and|in|of)\b)", m):
       result.add tkn(src, m, i, tkOp)
     elif src.findRe(re2"^([\.\+\-/\\,;:\[\]\(\)\{\}~!@#$%^|&?*=><])", m):
       result.add tkn(src, m, i, tkOp)
@@ -114,7 +114,7 @@ func parseForTokens*(source: string): seq[Token] =
     elif src.findRe(re2"^(\b(true|false|on|off)\b)", m):
       result.add tkn(src, m, i, tkBool)
     # Keywords
-    elif src.findRe(re2"^(\b(if|elif|else|while|for|case|of|var|const|continue|break)\b)", m):
+    elif src.findRe(re2"^(\b(if|elif|else|while|for|case|var|const|continue|break)\b)", m):
       result.add tkn(src, m, i, tkKeyword)
     elif src.findRe(re2"^(\b(print|null)\b)", m):
       result.add tkn(src, m, i, tkKeyword)

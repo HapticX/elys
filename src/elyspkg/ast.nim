@@ -9,11 +9,11 @@ type
   ASTKind* {.size: sizeof(int8).} = enum
     akRoot,
     akExpr, akNull, akInt, akFloat, akBool, akString, akArr, akVar, akBinOp, akUnaryOp,
-    akTernary,
+    akTernary, akBracketExpr, akSliceExpr,
     akBinOpExpr, akRelativeOp, akAnd, akOr, akIn, akNot,
     akEof,
     akStmt, akStmtList, akAssign, akPrint, akIncDec, akElifBranch, akElseBranch,
-    akIfStmt, akBreak, akContinue, akWhile
+    akIfStmt, akBreak, akContinue, akWhile, akAssignBracket
   ASTRoot* = ref object of RootObj
     kind*: ASTKind
 
@@ -29,6 +29,13 @@ type
     val*: string
   ArrayAST* = ref object of ASTExpr
     val*: seq[ASTRoot]
+  BracketExprAST* = ref object of ASTExpr
+    index*: ASTRoot
+    expr*: ASTRoot
+    indexes*: seq[ASTRoot]
+  SliceExprAST* = ref object of ASTExpr
+    l*, r*: ASTRoot
+    op*: string
   VarAST* = ref object of ASTExpr
     name*: string
   BinOpAST* = ref object of ASTExpr
@@ -65,6 +72,10 @@ type
     isConst*: bool
     isAssign*: bool
     assignOp*: string
+  AssignBracketStmt* = ref object of Stmt
+    expr*: BracketExprAST
+    val*: ASTRoot
+    op*: string
   IncDecStmt* = ref object of Stmt
     op*: string
     expr*: ASTRoot
@@ -91,6 +102,7 @@ type
   EnvVar* = ref object
     val*: ASTExpr
     isConst*: bool
+    topLvl*: bool
   Environment* = ref object
     vars*: TableRef[string, EnvVar]
     lvl*: int
@@ -102,7 +114,14 @@ type
 proc newEnv*(vars: TableRef[string, EnvVar], lvl: int, modules: seq[string]): Environment =
   Environment(vars: vars, lvl: lvl, modules: modules)
 proc newEnv*(env: Environment): Environment =
-  Environment(vars: env.vars, lvl: env.lvl, modules: env.modules)
+  var vars = newTable[string, EnvVar]()
+  for k, v in env.vars.pairs:
+    vars[k] = EnvVar(
+      val: v.val,
+      isConst: v.isConst,
+      topLvl: true
+    )
+  Environment(vars: vars, lvl: env.lvl, modules: env.modules)
 proc newEnv*(): Environment =
   Environment(vars: newTable[string, EnvVar](), lvl: 0, modules: @[])
 
@@ -138,6 +157,11 @@ method `$`*(ast: IfStmt): string =
 method `$`*(ast: WhileStmt): string = "WhileStmt(" & $ast.condition & ", " & $ast.body & ")"
 method `$`*(ast: BreakStmt): string = "BreakStmt()"
 method `$`*(ast: ContinueStmt): string = "ContinueStmt()"
+method `$`*(ast: ArrayAST): string = "ArrayAST(" & ast.val.join(", ") & ")"
+method `$`*(ast: BracketExprAST): string =
+  "BracketExprAST(" & $ast.expr & ", " & $ast.index & ", " & $ast.indexes & ")"
+method `$`*(ast: SliceExprAST): string =
+  "SliceExprAST(" & $ast.l & ast.op & $ast.r & ")"
 
 
 macro evalFor(t, body: untyped) =
@@ -160,6 +184,15 @@ proc intAst*(val: int): IntAST = IntAST(val: val, kind: akInt)
 proc floatAst*(val: float): FloatAST = FloatAST(val: val, kind: akFloat)
 proc stringAst*(val: string): StringAST = StringAST(val: val, kind: akString)
 proc boolAst*(val: bool): BoolAST = BoolAST(val: val, kind: akBool)
+
+proc arrAst*(val: seq[ASTRoot]): ArrayAST =
+  ArrayAST(val: val, kind: akArr)
+
+proc bracket*(expr, index: ASTRoot, indexes: seq[ASTRoot]): BracketExprAST =
+  BracketExprAST(index: index, expr: expr, indexes: indexes, kind: akBracketExpr)
+
+proc slice*(l, r: ASTRoot, op: string): SliceExprAST =
+  SliceExprAST(l: l, r: r, op: op, kind: akSliceExpr)
 
 proc unaryOpAst*(expr: ASTRoot, op: string): UnaryOpAST =
   UnaryOpAST(kind: akUnaryOp, expr: expr, op: op)
@@ -188,6 +221,9 @@ proc assignStmtAst*(name: string, expr: ASTRoot,
     isAssign: isAssign, assignOp: assignOp,
     kind: akAssign
   )
+
+proc assignBracket*(expr: BracketExprAST, val: ASTRoot, op: string): AssignBracketStmt =
+  AssignBracketStmt(expr: expr, val: val, kind: akAssignBracket, op: op[1..^1])
 
 proc elifBranchStmt*(condition: ASTRoot, body: ASTRoot): ElifBranchStmt =
   ElifBranchStmt(condition: condition, body: body, kind: akElifBranch)
@@ -225,6 +261,7 @@ proc astName*(a: ASTRoot): string =
     of akNull: "null"
     of akBool: "bool"
     of akString: "string"
+    of akSliceExpr: "slice"
     of akArr: "array"
     else: "object"
 
@@ -236,6 +273,9 @@ proc astValue*(a: ASTRoot, env: Environment): string =
     of akNull: "null"
     of akBool: $a.BoolAST.val
     of akString: $a.StringAST.val
+    of akSliceExpr:
+      "Slice(" & a.SliceExprAST.l.astValue(env) & a.SliceExprAST.op &
+      a.SliceExprAST.r.astValue(env) & ")"
     of akArr:
       var
         res = ""
@@ -390,11 +430,100 @@ proc `or`*(a, b: ASTRoot): ASTRoot =
   boolAst(a.BoolAST.val or b.BoolAST.val)
 
 
+# proc `..`*(a, b: ASTRoot): ASTRoot =
+#   if a.kind != b.kind:
+#     raise newException(ValueError, "Can not slice with different types")
+#   case a.kind:
+#     of akInt:
+#       return slice(Slice())
+
+
+proc `[]`*(a, b: ASTRoot, env: Environment): ASTRoot =
+  if a.kind == akArr and b.kind == akInt:
+    let idx = b.IntAST.val
+    if idx < 0:
+      return a.ArrayAST.val[^(-b.IntAST.val)]
+    else:
+      return a.ArrayAST.val[b.IntAST.val]
+  if a.kind == akString and b.kind == akSliceExpr:
+    let
+      left = b.SliceExprAST.l.IntAST.val
+      right = b.SliceExprAST.r.IntAST.val
+    if left < 0 and right < 0:
+      return stringAst($a.StringAST.val[^(-left)..^(-right)])
+    elif left < 0:
+      return stringAst($a.StringAST.val[^(-left)..right])
+    elif right < 0:
+      return stringAst($a.StringAST.val[left..^(-right)])
+    else:
+      return stringAst($a.StringAST.val[left..right])
+  if a.kind == akArr and b.kind == akSliceExpr:
+    let
+      left = b.SliceExprAST.l.IntAST.val
+      right = b.SliceExprAST.r.IntAST.val
+    if left < 0 and right < 0:
+      return arrAst(a.ArrayAST.val[^(-left)..^(-right)])
+    elif left < 0:
+      return arrAst(a.ArrayAST.val[^(-left)..right])
+    elif right < 0:
+      return arrAst(a.ArrayAST.val[left..^(-right)])
+    else:
+      return arrAst(a.ArrayAST.val[left..right])
+  elif a.kind == akString and b.kind == akInt:
+    let idx = b.IntAST.val
+    if idx < 0:
+      return stringAst($a.StringAST.val[^(-b.IntAST.val)])
+    else:
+      return stringAst($a.StringAST.val[b.IntAST.val])
+  raise newException(
+    ValueError,
+    "Can not get element from " & a.astValue(env) & " at index " & b.astValue(env)
+  )
+
+
+proc `[]=`*(a, b: ASTRoot, env: Environment, val: ASTRoot) =
+  if a.kind == akArr and b.kind == akInt:
+    let idx = b.IntAST.val
+    if idx < 0:
+      a.ArrayAST.val[^(-b.IntAST.val)] = val
+    else:
+      a.ArrayAST.val[b.IntAST.val] = val
+  else:
+    raise newException(ValueError, "Can not change element of " & a.astName)
+
+
 evalFor NullAST: nullAst()
-evalFor IntAST: intAst(self.val)
-evalFor FloatAST: floatAst(self.val)
-evalFor StringAST: stringAst(self.val)
-evalFor BoolAST: boolAst(self.val)
+evalFor IntAST: self
+evalFor FloatAST: self
+evalFor StringAST: self
+evalFor BoolAST: self
+
+method eval*(self: SliceExprAST, env: Environment): ASTRoot =
+  self.l = self.l.eval(env)
+  self.r =
+    if self.op == "..":
+      self.r.eval(env)
+    else:
+      binOpAst(self.r, intAst(1), "-").eval(env)
+  self.op = ".."
+  if self.l.kind notin {akInt}:
+    raise newException(ValueError, "Can not to use " & self.l.astValue(env) & " in slice")
+  if self.r.kind notin {akInt}:
+    raise newException(ValueError, "Can not to use " & self.r.astValue(env) & " in slice")
+  return self
+
+method eval*(self: ArrayAST, env: Environment): ASTRoot =
+  for i in 0..<self.val.len:
+    self.val[i] = self.val[i].eval(env)
+  return self
+
+method eval*(self: BracketExprAST, env: Environment): ASTRoot =
+  let
+    expr = self.expr.eval(env)
+    index = self.index.eval(env)
+  result = expr[index, env]
+  for i in self.indexes:
+    result = result[i.eval(env), env]
 
 method eval*(self: VarAST, env: Environment): ASTRoot =
   if not env.vars.hasKey(self.name):
@@ -484,9 +613,13 @@ method eval*(self: AssignStmt, env: Environment): ASTRoot =
   if self.isAssign and self.assignOp == "=":
     # var x = y
     # const x = y
-    if env.vars.hasKey(self.name):
+    if env.vars.hasKey(self.name) and not env.vars[self.name].topLvl:
       raise newException(RuntimeError, "Variable " & self.name & " was assigned before")
-    env.vars[self.name] = EnvVar(val: self.expr.eval(env).ASTExpr, isConst: self.isConst)
+    env.vars[self.name] = EnvVar(
+      val: self.expr.eval(env).ASTExpr,
+      isConst: self.isConst,
+      topLvl: false
+    )
   elif self.isAssign:
     # x += y
     # x //= 2
@@ -504,6 +637,27 @@ method eval*(self: AssignStmt, env: Environment): ASTRoot =
     if env.vars[self.name].isConst:
       raise newException(RuntimeError, "Const " & self.name & " can not be modified")
     env.vars[self.name].val = self.expr.eval(env).ASTExpr
+  nullAst()
+
+
+method eval*(self: AssignBracketStmt, env: Environment): ASTRoot =
+  let
+    val =
+      if self.op == "":
+        self.val.eval(env)
+      else:
+        binOpAst(self.expr.eval(env), self.val.eval(env), self.op)
+  var values: seq[tuple[i: ASTRoot, v: ASTRoot]] = @[
+    (intAst(-1).ASTRoot, self.expr.expr.eval(env)),
+  ]
+  let firstIndex = self.expr.index.eval(env)
+  values.add (firstIndex, values[^1].v[firstIndex, env])
+  for i in self.expr.indexes:
+    let index = i.eval(env)
+    values.add (index, values[^1].v[index, env])
+  values[^1].v = val
+  for i in countdown(values.len-2, 0):
+    values[i].v[values[i+1].i, env] = values[i+1].v
   nullAst()
 
 

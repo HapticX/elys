@@ -77,6 +77,7 @@ proc exprValue(): Combinator =
 
 proc expr(): Combinator
 proc exprTerm(): Combinator
+proc exprTermPre(): Combinator
 proc incDecStatement(): Combinator
 proc unaryOperatorStmt(): Combinator
 proc stmtList(): Combinator
@@ -85,24 +86,79 @@ proc stmtListEmbed(): Combinator
 
 
 proc exprGroup(): Combinator =
-  (operator("(") + lazy(expr) + operator(")")) ^ processGroup
+  (operator"(" + lazy(expr) + operator")") ^ processGroup
 
 
 proc processBExprNot(res: Result): Option[Result] =
   astRes(notAst(res.valy.ast))
 proc bExprNot(): Combinator =
-  ((operator("!") | operator("not")) + lazy(expr)) ^ processBExprNot
+  ((operator"!" | operator"not") + lazy(expr)) ^ processBExprNot
 
 
-proc exprTerm(): Combinator =
+proc processExprArray(res: Result): Option[Result] =
+  var arr: seq[ASTRoot] = @[]
+  for i in res.arr:
+    arr.add i.valx.ast
+  astRes(arrAst(arr))
+proc exprArray(): Combinator =
+  (
+    (
+      operator"[" + rep(
+        lazy(expr) + opt(operator",")
+      ) + operator"]"
+    ) ^ processGroup
+  ) ^ processExprArray
+
+
+proc processBracketExpr(res: Result): Option[Result] =
+  var arr: seq[ASTRoot] = @[]
+  for i in res.valy.arr:
+    arr.add i.ast
+  astRes(bracket(res.valx.valx.ast, res.valx.valy.ast, arr))
+proc bracketExpr(): Combinator =
+  (
+    lazy(exprTermPre) + ((operator"[" + lazy(expr) + operator"]") ^ processGroup) +
+    rep(((operator"[" + lazy(expr) + operator"]") ^ processGroup))
+  ) ^ processBracketExpr
+
+
+proc processSliceExpr(res: Result): Option[Result] =
+  if res.valx.kind == rkStr:
+    astRes(slice(intAst(0), res.valy.ast, res.valx.val.get))
+  elif res.valy.kind == rkStr:
+    astRes(slice(res.valx.ast, intAst(-1), res.valy.val.get))
+  else:
+    astRes(slice(res.valx.valx.ast, res.valy.ast, res.valx.valy.val.get))
+proc sliceExpr(): Combinator =
+  (
+    alt(
+      (operator"..") + lazy(exprTermPre),
+      alt(
+        lazy(exprTermPre) + (operator".." | operator"..<") + lazy(exprTermPre),
+        lazy(exprTermPre) + (operator".."),
+      )
+    )
+  ) ^ processSliceExpr
+
+
+proc exprTermPre(): Combinator =
   (
     exprGroup() |
     lazy(ifStatement) |
     lazy(stmtListEmbed) |
+    lazy(exprArray) |
     incDecStatement() |
     unaryOperatorStmt() |
     bExprNot() |
     exprValue()
+  )
+
+
+proc exprTerm(): Combinator =
+  (
+    lazy(bracketExpr) |
+    lazy(sliceExpr) |
+    exprTermPre()
   )
 
 proc processBinOp(res: Result): Option[Result] =
@@ -136,19 +192,25 @@ proc processAssignStmt(res: Result): Option[Result] =
   astRes(assignStmtAst(res.valx.valx.valy.val.get, res.valy.ast, false, true))
 proc assignStmt(): Combinator =
   # var x = 12300
-  (keyword("var") + idTag + operator("=") + expr()) ^ processAssignStmt
+  (keyword"var" + idTag + operator"=" + expr()) ^ processAssignStmt
 
 proc processAssignConstStmt(res: Result): Option[Result] =
   astRes(assignStmtAst(res.valx.valx.valy.val.get, res.valy.ast, true, true))
 proc assignConstStmt(): Combinator =
   # const x = 100
-  (keyword("const") + idTag + operator("=") + expr()) ^ processAssignConstStmt
+  (keyword"const" + idTag + operator"=" + expr()) ^ processAssignConstStmt
 
 proc processReAssignStmt(res: Result): Option[Result] =
   astRes(assignStmtAst(res.valx.valx.val.get, res.valy.ast, false, false, res.valx.valy.val.get))
 proc reAssignStmt(): Combinator =
   # x = y
   (idTag + anyOpInList(assignOperators) + expr()) ^ processReAssignStmt
+
+proc processAssignBracketStmt(res: Result): Option[Result] =
+  astRes(assignBracket(res.valx.valx.ast.BracketExprAST, res.valy.ast, res.valx.valy.val.get))
+proc assignBracketStmt(): Combinator =
+  # x[z] = y
+  (bracketExpr() + anyOpInList(assignOperators) + expr()) ^ processAssignBracketStmt
 
 proc every(res: Result): Option[Result] =
   res.arr[0].valx.some
@@ -167,10 +229,10 @@ proc printStmt(): Combinator =
   # print x
   # print x, y, z
   (
-    keyword("print") + alt(
-      (operator("(") + opt(
-          rep((expr() + opt(operator(","))) ^ everyExpr)) + operator(")")) ^ processGroup,
-      opt(rep((expr() + opt(operator(","))) ^ everyExpr)),
+    keyword"print" + alt(
+      (operator"(" + opt(
+          rep((expr() + opt(operator",")) ^ everyExpr)) + operator")") ^ processGroup,
+      opt(rep((expr() + opt(operator",")) ^ everyExpr)),
     )
   ) ^ processPrint
 
@@ -202,15 +264,15 @@ proc ifStatement(): Combinator =
   # }
   let
     condition = alt(
-      (operator("(") + expr() + operator(")")) ^ processGroup,
+      (operator"(" + expr() + operator")") ^ processGroup,
       expr(),
     )
-    stmts = (operator("{") + opt(lazy(stmtList)) + operator("}")) ^ processGroup
+    stmts = (operator"{" + opt(lazy(stmtList)) + operator"}") ^ processGroup
   (
-    keyword("if") + condition + stmts + rep(
-      keyword("elif") + condition + stmts
+    keyword"if" + condition + stmts + rep(
+      keyword"elif" + condition + stmts
     ) + opt(
-      keyword("else") + stmts
+      keyword"else" + stmts
     )
   ) ^ processIfStmt
 
@@ -242,30 +304,30 @@ proc incDecStatement(): Combinator =
 
 
 proc stmtListEmbed(): Combinator =
-  (operator("{") + opt(lazy(stmtList)) + operator("}")) ^ processGroup
+  (operator"{" + opt(lazy(stmtList)) + operator"}") ^ processGroup
 
 
 proc processWhileStatement(res: Result): Option[Result] =
   astRes(whileStmt(res.valx.valy.ast, res.valy.ast))
 proc whileStatement(): Combinator =
   (
-    keyword("while") + alt(
-      (operator("(") + expr() + operator(")")) ^ processGroup,
+    keyword"while" + alt(
+      (operator"(" + expr() + operator")") ^ processGroup,
       expr(),
-    ) + (operator("{") + opt(lazy(stmtList)) + operator("}")) ^ processGroup
+    ) + (operator"{" + opt(lazy(stmtList)) + operator"}") ^ processGroup
   ) ^ processWhileStatement
 
 
 proc processBreakStatement(res: Result): Option[Result] =
   astRes(breakStmt())
 proc breakStatement(): Combinator =
-  keyword("break") ^ processBreakStatement
+  keyword"break" ^ processBreakStatement
 
 
 proc processContinueStatement(res: Result): Option[Result] =
   astRes(continueStmt())
 proc continueStatement(): Combinator =
-  keyword("continue") ^ processContinueStatement
+  keyword"continue" ^ processContinueStatement
 
 
 proc stmt(): Combinator =
@@ -273,6 +335,7 @@ proc stmt(): Combinator =
     ifStatement() |
     whileStatement() |
     printStmt() |
+    assignBracketStmt() |
     assignStmt() |
     assignConstStmt() |
     reAssignStmt() |

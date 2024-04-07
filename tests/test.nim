@@ -91,3 +91,49 @@ suite "Elys":
     }
     print y
     """)
+  
+  test "test arrays":
+    exec("""
+    var x = [1, 2, 3, 4, 5]
+    var y = [
+      1  # you can create arrays also without comma
+      # it's possible to use embedded statements here
+      {var x=0; while (x < 5) {x++}; x;}
+    ]
+    print x, y
+    print x[0], x[1], y[1]
+    var mt = [
+      [1 2 3]
+      [4 5 6]
+      [7 8 9]
+    ]
+    print mt
+    print mt[1][1]
+    print {
+      [2 3 4]
+    }[1]
+    print "Hello, world!"[10]
+    print "Hello, world!"[-2]
+    print "Hello, world!"[2..10]
+    print "Hello, world!"[..3]
+    print "Hello, world!"[..-3]
+    print "Hello, world!"[3..]
+    print "'" + "Hello, world!"[3..5] + "'" + " is not " + "'" + "Hello, world"[3..<5] + "'"
+
+    # and ...
+    print [
+      [1 2 3]
+      [4 5 6]
+      {
+        var x = [0 0 0]
+        x[0] = 7
+        x[1] = 8
+        x[2] = 9
+        x
+      }
+    ][{
+      var x = 0
+      while x < 2 {x++}
+      x
+    }..]
+    """)
