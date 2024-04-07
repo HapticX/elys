@@ -111,24 +111,24 @@ func fnRes*(function: ResultFunc): Option[Result] =
 func getVal*(res: Result): string =
   case res.kind:
     of rkStr:
-      return $res.val
+      $res.val
     of rkPair:
-      return "(" & res.valx.getVal & ", " & res.valy.getVal & ")"
+      "(" & res.valx.getVal & ", " & res.valy.getVal & ")"
     of rkArr:
       var arr: seq[string] = @[]
       for i in res.arr:
         arr.add i.getVal
-      return "[" & arr.join(", ") & "]"
+      "[" & arr.join(", ") & "]"
     of rkBool:
-      return $res.valb
+      $res.valb
     of rkInt:
-      return $res.vali
+      $res.vali
     of rkFloat:
-      return $res.valf
+      $res.valf
     of rkFun:
-      return "function"
+      "function"
     of rkAst:
-      return $res.ast
+      $res.ast
 
 func `$`*(res: Result): string =
   "Result(" & res.getVal & ")"
