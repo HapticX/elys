@@ -46,4 +46,15 @@ suite "Elys":
     if 2 + 2 * 2 == 6 {
       print "yeap, 2 + 2 * 2 is 6"
     }
+
+    print if false {
+      var x = 10
+      x
+    } else {
+      var y = 20
+      y
+    }
+
+    var x = if ("") {0} elif (true) {"hello"} else {.0}
+    print x
     """)

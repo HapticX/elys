@@ -79,6 +79,8 @@ proc expr(): Combinator
 proc exprTerm(): Combinator
 proc incDecStatement(): Combinator
 proc unaryOperatorStmt(): Combinator
+proc stmtList(): Combinator
+proc ifStatement(): Combinator
 
 
 proc exprGroup(): Combinator =
@@ -94,6 +96,7 @@ proc bExprNot(): Combinator =
 proc exprTerm(): Combinator =
   (
     exprGroup() |
+    lazy(ifStatement) |
     incDecStatement() |
     unaryOperatorStmt() |
     bExprNot() |
@@ -126,8 +129,6 @@ proc expr(): Combinator =
 
 
 # ---=== Statements ===--- #
-
-proc stmtList(): Combinator
 
 proc processAssignStmt(res: Result): Option[Result] =
   astRes(assignStmtAst(res.valx.valx.valy.val.get, res.valy.ast, false, true))
