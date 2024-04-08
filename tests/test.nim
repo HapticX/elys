@@ -149,3 +149,20 @@ suite "Elys":
     x[0], y[0] = 100, 50
     print x, y
     """)
+  
+  test "for statement":
+    exec("""
+    var x = [10 11 12 13 14]
+    for i, v in x {
+      print i, v
+    }
+    for i in x {
+      print i
+    }
+    for i in 0..<10 {
+      print i
+    }
+    for i, v in "hello" {
+      print i, v
+    }
+    """)

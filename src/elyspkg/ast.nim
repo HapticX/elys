@@ -1,91 +1,12 @@
 import
+  ./result,
   macros,
   strutils,
   tables,
   options
 
 
-type
-  ASTKind* {.size: sizeof(int8).} = enum
-    akRoot,
-    akExpr, akNull, akInt, akFloat, akBool, akString, akArr, akVar, akBinOp, akUnaryOp,
-    akTernary, akBracketExpr, akSliceExpr, akNot,
-    akEof,
-    akStmt, akStmtList, akAssign, akPrint, akIncDec, akElifBranch, akElseBranch,
-    akIfStmt, akBreak, akContinue, akWhile, akAssignBracket, akSwap
-  ASTRoot* = ref object of RootObj
-    kind*: ASTKind
-
-  ASTExpr* = ref object of ASTRoot
-  NullAST* = ref object of ASTExpr
-  IntAST* = ref object of ASTExpr
-    val*: int
-  FloatAST* = ref object of ASTExpr
-    val*: float
-  BoolAST* = ref object of ASTExpr
-    val*: bool
-  StringAST* = ref object of ASTExpr
-    val*: string
-  ArrayAST* = ref object of ASTExpr
-    val*: seq[ASTRoot]
-  BracketExprAST* = ref object of ASTExpr
-    index*: ASTRoot
-    expr*: ASTRoot
-    indexes*: seq[ASTRoot]
-  SliceExprAST* = ref object of ASTExpr
-    l*, r*: ASTRoot
-    op*: string
-  VarAST* = ref object of ASTExpr
-    name*: string
-  BinOpAST* = ref object of ASTExpr
-    op*: string
-    l*, r*: ASTRoot
-  UnaryOpAST* = ref object of ASTExpr
-    op*: string
-    expr*: ASTRoot
-  TernaryOpAST* = ref object of ASTExpr
-    first*, second*, third*: ASTRoot
-    op1*, op2*: string
-  NotOp* = ref object of ASTExpr
-    expr*: ASTRoot
-    
-  Stmt* = ref object of ASTRoot
-  EofStmt* = ref object of Stmt
-  StmtList* = ref object of Stmt
-    statements*: seq[ASTRoot]
-    parent*: ASTKind
-  AssignStmt* = ref object of Stmt
-    name*: string
-    expr*: ASTRoot
-    isConst*: bool
-    isAssign*: bool
-    assignOp*: string
-  AssignBracketStmt* = ref object of Stmt
-    expr*: BracketExprAST
-    val*: ASTRoot
-    op*: string
-  IncDecStmt* = ref object of Stmt
-    op*: string
-    expr*: ASTRoot
-  ElifBranchStmt* = ref object of Stmt
-    condition*: ASTRoot
-    body*: ASTRoot
-  ElseBranchStmt* = ref object of Stmt
-    body*: ASTRoot
-  IfStmt* = ref object of Stmt
-    condition*: ASTRoot
-    body*: ASTRoot
-    elifArray*: seq[ElifBranchStmt]
-    elseBranch*: Option[ElseBranchStmt]
-  WhileStmt* = ref object of Stmt
-    body*: ASTRoot
-    condition*: ASTRoot
-  SwapStmt* = ref object of Stmt
-    l*, r*: ASTRoot
-    toL*, toR*: ASTRoot
-  ContinueStmt* = ref object of Stmt
-  BreakStmt* = ref object of Stmt
-  
+type  
   SignalKind* {.size: sizeof(int8).} = enum
     sNothing,
     sBreak,
@@ -115,49 +36,6 @@ proc newEnv*(env: Environment): Environment =
   Environment(vars: vars, lvl: env.lvl, modules: env.modules)
 proc newEnv*(): Environment =
   Environment(vars: newTable[string, EnvVar](), lvl: 0, modules: @[])
-
-
-func `$`*(ast: ASTRoot): string =
-  case ast.kind:
-    of akNull: "NullAST()"
-    of akInt: "IntAST(" & $ast.IntAST.val & ")"
-    of akFloat: "FloatAST(" & $ast.FloatAST.val & ")"
-    of akString: "StringAST(" & $ast.StringAST.val & ")"
-    of akBool: "BoolAST(" & $ast.BoolAST.val & ")"
-    of akBinOp: "BinOpAST(" & $ast.BinOpAST.l & ", " & $ast.BinOpAST.r & ", " & ast.BinOpAST.op & ")"
-    of akVar: "VarAST(" & ast.VarAST.name & ")"
-    of akNot: "NotOp(" & $ast.NotOp.expr & ")"
-    of akEof: "EOFStmt()"
-    of akStmtList: "StmtList(" & ast.StmtList.statements.join(", ") & ")"
-    of akIncDec:
-      case ast.IncDecStmt.op:
-        of "++":
-          "Increment(" & $ast.IncDecStmt.expr & ")"
-        of "--":
-          "Decrement(" & $ast.IncDecStmt.expr & ")"
-        else:
-          ""
-    of akElseBranch: "ElseBranchStmt(" & $ast.ElseBranchStmt.body & ")"
-    of akElifBranch: "ElifBranchStmt(" & $ast.ElifBranchStmt.condition & ", " & $ast.ElifBranchStmt.body & ")"
-    of akIfStmt:
-      "IfStmt(" & $ast.IfStmt.condition & ", " & $ast.IfStmt.body &
-      ", [" & ast.IfStmt.elifArray.join(", ") & "], " &
-      $ast.IfStmt.elseBranch & ")"
-    of akWhile: "WhileStmt(" & $ast.WhileStmt.condition & ", " & $ast.WhileStmt.body & ")"
-    of akBreak: "BreakStmt()"
-    of akContinue: "ContinueStmt()"
-    of akArr: "ArrayAST(" & ast.ArrayAST.val.join(", ") & ")"
-    of akBracketExpr:
-      "BracketExprAST(" & $ast.BracketExprAST.expr & ", " &
-      $ast.BracketExprAST.index & ", " & $ast.BracketExprAST.indexes & ")"
-    of akSliceExpr:
-      "SliceExprAST(" & $ast.SliceExprAST.l & ast.SliceExprAST.op &
-      $ast.SliceExprAST.r & ")"
-    of akSwap:
-      "SwapStmt(" & $ast.SwapStmt.l & ", " & $ast.SwapStmt.r & " = " &
-      $ast.SwapStmt.toL & ", " & $ast.SwapStmt.toR & ")"
-    else:
-      "ASTRoot(kind: " & $ast.kind & ")"
 
 
 macro evalFor(t, body: untyped) =
@@ -225,6 +103,9 @@ template elifBranchStmt*(c: ASTRoot, b: ASTRoot): ElifBranchStmt =
 template elseBranchStmt*(b: ASTRoot): ElseBranchStmt =
   ElseBranchStmt(body: b, kind: akElseBranch)
 
+template printAst*(d: seq[Result]): PrintStmt =
+  PrintStmt(data: d, kind: akPrint)
+
 template ifStmt*(c: ASTRoot, b: ASTRoot,
                  earr: seq[ElifBranchStmt], eb: Option[ElseBranchStmt]): IfStmt =
   IfStmt(
@@ -238,11 +119,29 @@ template whileStmt*(c: ASTRoot, b: ASTRoot): WhileStmt =
     condition: c, body: b, kind: akWhile
   )
 
+template forInStmt*(v: seq[ASTRoot], o, b: ASTRoot): ForInStmt =
+  ForInStmt(vars: v, obj: o, body: b, kind: akForInStmt)
+
 template swap*(left, right, toLeft, toRight: ASTRoot): SwapStmt =
   SwapStmt(l: left, r: right, toL: toLeft, toR: toRight, kind: akSwap)
 
 
 method eval*(self: ASTRoot, env: Environment): ASTRoot {.base.} = nullAst()
+
+
+func `[]=`*(env: Environment, key: string, value: ASTExpr) =
+  env.vars[key].val = value
+
+
+func setDef*(env: Environment, key: string, value: ASTExpr) =
+  if env.vars.hasKey(key):
+    env.vars[key].val = value
+  else:
+    env.vars[key] = EnvVar(val: value)
+
+
+func `[]`*(env: Environment, key: string): ASTExpr =
+  env.vars[key].val
 
 
 func astName*(a: ASTRoot): string =
@@ -678,9 +577,24 @@ method eval*(self: WhileStmt, env: Environment): ASTRoot =
   return nullAst()
 
 
+method eval*(self: PrintStmt, env: Environment): ASTRoot =
+  var
+    res = ""
+    i = 0
+  while i < self.data.len:
+    if i == self.data.len-1:
+      res &= $self.data[i].ast.eval(env).astValue(env)
+    else:
+      res &= $self.data[i].ast.eval(env).astValue(env) & ", "
+    inc i
+  echo res
+  nullAst()
+
+
 method eval*(self: BreakStmt, env: Environment): ASTRoot =
   env.signal = sBreak
   return self
+
 method eval*(self: ContinueStmt, env: Environment): ASTRoot =
   env.signal = sContinue
   return self
@@ -704,3 +618,66 @@ method eval*(self: SwapStmt, env: Environment): ASTRoot =
     else:
       raise newException(RuntimeError, "Can not swap this")
   nullAst()
+
+method eval*(self: ForInStmt, env: Environment): ASTRoot =
+  let
+    obj = self.obj.eval(env)
+  var
+    environment = newEnv(env)
+  # check for variables
+  for i in self.vars:
+    if i.kind != akVar:
+      raise newException(
+        RuntimeError,
+        "Can not iterate over " & self.obj.astValue(environment) &
+        " via " & i.astValue(environment)
+      )
+  case self.vars.len:
+    of 1:
+      let variable = self.vars[0].VarAST.name
+      case obj.kind:
+        of akArr:
+          for i in obj.ArrayAST.val:
+            environment.setDef(variable, i.eval(environment).ASTExpr)
+            discard self.body.eval(environment)
+        of akSliceExpr:
+          for i in obj.SliceExprAST.l.IntAST.val..obj.SliceExprAST.r.IntAST.val:
+            environment.setDef(variable, intAst(i))
+            discard self.body.eval(environment)
+        of akString:
+          for i in obj.StringAST.val:
+            environment.setDef(variable, stringAst($i))
+            discard self.body.eval(environment)
+        else:
+          raise newException(
+            RuntimeError,
+            "Can not unpack " & $self.vars.len & " variables from " &
+            self.obj.astValue(env)
+          )
+    of 2:
+      let
+        variable1 = self.vars[0].VarAST.name
+        variable2 = self.vars[1].VarAST.name
+      case obj.kind:
+        of akArr:
+          for (index, value) in obj.ArrayAST.val.pairs:
+            environment.setDef(variable2, value.eval(environment).ASTExpr)
+            environment.setDef(variable1, intAst(index))
+            discard self.body.eval(environment)
+        of akString:
+          for (index, value) in obj.StringAST.val.pairs:
+            environment.setDef(variable2, stringAst($value))
+            environment.setDef(variable1, intAst(index))
+            discard self.body.eval(environment)
+        else:
+          raise newException(
+            RuntimeError,
+            "Can not unpack " & $self.vars.len & " variables from " &
+            self.obj.astValue(env)
+          )
+    else:
+      raise newException(
+        RuntimeError,
+        "Can not unpack " & $self.vars.len & " variables from " &
+        self.obj.astValue(env)
+      )

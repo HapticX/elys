@@ -2,6 +2,7 @@ import
   ./lexer,
   ./combinator,
   ./ast,
+  ./result,
   strutils,
   sequtils,
   options
@@ -338,9 +339,29 @@ func swapStatement(): Combinator =
   ) ^ processSwapStatement
 
 
+func processForInStatement(res: Result): Option[Result] =
+  var arr: seq[ASTRoot] = @[]
+  for i in res.valx.valy.valx.valx.arr:
+    arr.add i.ast
+  astRes(forInStmt(arr, res.valx.valy.valy.ast, res.valy.ast))
+func forInStatement(): Combinator =
+  let conditionStatement = alt(
+    (operator"(" + repSep(idTag() ^ processVar, operator",") + operator")") ^ processGroup,
+    repSep(idTag() ^ processVar, operator","),
+  ) + operator"in" + expr()
+  (
+    keyword("for") + alt(
+      (operator"(" + conditionStatement + operator")") ^ processGroup,
+      conditionStatement,
+    ) +
+    (operator"{" + opt(lazy(stmtList)) + operator"}") ^ processGroup
+  ) ^ processForInStatement
+
+
 func stmt(): Combinator =
   (
     ifStatement() |
+    forInStatement() |
     whileStatement() |
     swapStatement() |
     printStmt() |

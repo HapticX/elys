@@ -2,6 +2,7 @@ import
   ./elyspkg/lexer,
   ./elyspkg/parser,
   ./elyspkg/ast,
+  ./elyspkg/result,
   options
 
 

@@ -1,41 +1,12 @@
 import
   ./lexer,
   ./ast,
+  ./result,
   strutils,
   options
 
 
 type
-  ResultKind* {.size: sizeof(int8).} = enum
-    rkStr,
-    rkPair,
-    rkArr,
-    rkBool,
-    rkInt,
-    rkFloat,
-    rkFun,
-    rkAst
-  ResultFunc* = proc(res: Result): Option[Result]
-  Result* = ref object
-    case kind*: ResultKind
-      of rkStr:
-        val*: Option[string]
-      of rkPair:
-        valx*: Result
-        valy*: Result
-      of rkArr:
-        arr*: seq[Result]
-      of rkBool:
-        valb*: bool
-      of rkInt:
-        vali*: int
-      of rkFloat:
-        valf*: float
-      of rkFun:
-        valfn*: ResultFunc
-      of rkAst:
-        ast*: ASTRoot
-    pos*: int
   ProcessFunc* = proc(val: Result): Option[Result]
   LazyFunc* = proc(): Combinator
   Combinator* = ref object of RootObj
@@ -67,10 +38,6 @@ type
   Phrase* = ref object of Combinator
     c*: Combinator
 
-  # AST help
-  PrintStmt* = ref object of Stmt
-    data: seq[Result]
-
 
 func reserved*(val: string, kind: TokenKind): Reserved = Reserved(tkn: Token(value: val, kind: kind))
 func tag*(kind: TokenKind): Tag = Tag(kind: kind)
@@ -97,59 +64,6 @@ method `$`*(c: Process): string = "Process(" & $c.c & ", func)"
 method `$`*(c: Exp): string = "Exp(" & $c.c & ", " & $c.sep & ")"
 method `$`*(c: Lazy): string = "Lazy(" & $c.c & ", func)"
 method `$`*(c: Phrase): string = "Phrase(" & $c.c & ")"
-
-
-func astRes*(ast: ASTRoot): Option[Result] =
-  Result(kind: rkAst, ast: ast).some
-
-func fnRes*(function: ResultFunc): Option[Result] =
-  Result(
-    kind: rkFun,
-    valfn: function
-  ).some
-
-func getVal*(res: Result): string =
-  case res.kind:
-    of rkStr:
-      $res.val
-    of rkPair:
-      "(" & res.valx.getVal & ", " & res.valy.getVal & ")"
-    of rkArr:
-      var arr: seq[string] = @[]
-      for i in res.arr:
-        arr.add i.getVal
-      "[" & arr.join(", ") & "]"
-    of rkBool:
-      $res.valb
-    of rkInt:
-      $res.vali
-    of rkFloat:
-      $res.valf
-    of rkFun:
-      "function"
-    of rkAst:
-      $res.ast
-
-func `$`*(res: Result): string =
-  "Result(" & res.getVal & ")"
-
-
-# --== AST ==-- #
-func printAst*(data: seq[Result]): PrintStmt =
-  PrintStmt(data: data, kind: akPrint)
-method `$`*(ast: PrintStmt): string = "PrintStmt(" & $ast.data & ")"
-method eval*(self: PrintStmt, env: Environment): ASTRoot =
-  var
-    res = ""
-    i = 0
-  while i < self.data.len:
-    if i == self.data.len-1:
-      res &= $self.data[i].ast.eval(env).astValue(env)
-    else:
-      res &= $self.data[i].ast.eval(env).astValue(env) & ", "
-    inc i
-  echo res
-  nullAst()
 
 
 {.experimental: "callOperator".}
