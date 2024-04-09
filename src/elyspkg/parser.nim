@@ -5,6 +5,7 @@ import
   ./result,
   strutils,
   sequtils,
+  tables,
   options
 
 
@@ -105,6 +106,21 @@ func exprArray(): Combinator =
   ) ^ processExprArray
 
 
+func processExprObject(res: Result): Option[Result] =
+  var r: seq[tuple[key, val: ASTRoot]] = @[]
+  for i in res.arr:
+    r.add (key: i.valx.valx.ast, val: i.valy.ast)
+  astRes(objAst(r))
+func exprObject(): Combinator =
+  (
+    (
+      operator"{" + repSep(
+        lazy(exprTermPre) + operator":" + lazy(expr),
+        operator","
+      ) + operator"}") ^ processGroup
+  ) ^ processExprObject
+
+
 func processBracketExpr(res: Result): Option[Result] =
   var arr: seq[ASTRoot] = @[]
   for i in res.valy.arr:
@@ -153,6 +169,7 @@ func exprTerm(): Combinator =
   (
     lazy(bracketExpr) |
     lazy(sliceExpr) |
+    lazy(exprObject) |
     exprTermPre()
   )
 

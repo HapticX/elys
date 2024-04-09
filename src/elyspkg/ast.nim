@@ -2,6 +2,8 @@ import
   ./result,
   macros,
   strutils,
+  sequtils,
+  hashes,
   tables,
   options
 
@@ -61,6 +63,9 @@ template boolAst*(v: bool): BoolAST = BoolAST(val: v, kind: akBool)
 
 template arrAst*(v: seq[ASTRoot]): ArrayAST =
   ArrayAST(val: v, kind: akArr)
+
+template objAst*(v: seq[tuple[key, val: ASTRoot]]): ObjectAST =
+  ObjectAST(val: v, kind: akObj)
 
 template bracket*(e, i: ASTRoot, idxs: seq[ASTRoot]): BracketExprAST =
   BracketExprAST(index: i, expr: e, indexes: idxs, kind: akBracketExpr)
@@ -146,13 +151,14 @@ func `[]`*(env: Environment, key: string): ASTExpr =
 
 func astName*(a: ASTRoot): string =
   case a.kind:
-    of akInt: "int"
-    of akFloat: "float"
-    of akNull: "null"
-    of akBool: "bool"
-    of akString: "string"
-    of akSliceExpr: "slice"
-    of akArr: "array"
+    of akInt: "int"  # 12090
+    of akFloat: "float"  # .1, 1203.2
+    of akNull: "null"  # null
+    of akBool: "bool" # true/false/on/off
+    of akString: "string" # ''
+    of akSliceExpr: "slice" # 0..10
+    of akArr: "array" # []
+    of akObj: "dict" # {}
     else: "object"
 
 
@@ -172,15 +178,31 @@ func astValue*(a: ASTRoot, env: Environment): string =
         i = 0
       while i < a.ArrayAST.val.len:
         if i == a.ArrayAST.val.len-1:
-          res &= $a.ArrayAST.val[i].eval(env).astValue(env)
+          res &= a.ArrayAST.val[i].eval(env).astValue(env)
         else:
-          res &= $a.ArrayAST.val[i].eval(env).astValue(env) & ", "
+          res &= a.ArrayAST.val[i].eval(env).astValue(env) & ", "
         inc i
       "[" & res & "]"
+    of akObj:
+      var
+        res = ""
+        i = 0
+      let obj = a.ObjectAST.val
+      while i < obj.len:
+        let
+          key = obj[i].key.eval(env)
+          val = obj[i].val.eval(env)
+        res = res & (if key.kind == akString: '"' & key.astValue(env) & '"' else: key.astValue(env))
+        res &= ": "
+        res = res & (if val.kind == akString: '"' & val.astValue(env) & '"' else: val.astValue(env))
+        if i != obj.len-1:
+          res &= ", "
+        inc i
+      "{" & res & "}"
     else: "object"
 
 
-func toBoolean*(a: ASTRoot, env: Environment): ASTRoot =
+func toBoolean*(a: ASTRoot, env: Environment = nil): ASTRoot =
   case a.kind:
     of akBool:
       return a
@@ -192,10 +214,17 @@ func toBoolean*(a: ASTRoot, env: Environment): ASTRoot =
       return boolAst(a.StringAST.val.len > 0)
     of akArr:
       return boolAst(a.ArrayAST.val.len > 0)
+    of akObj:
+      return boolAst(a.ObjectAST.val.len > 0)
     of akNull:
       return boolAst(false)
     else:
-      raise newException(RuntimeError, "Can not get boolean from " & $a.astValue(env))
+      if not env.isNil:
+        raise newException(RuntimeError, "Can not get boolean from " & $a.astValue(env))
+
+
+converter toBool*(ast: ASTRoot): bool =
+  ast.toBoolean().BoolAST.val
 
 
 func `+`(a, b: ASTRoot): ASTRoot =
@@ -237,6 +266,11 @@ func `*`*(a, b: ASTRoot): ASTRoot =
     return floatAst(a.FloatAST.val * b.FloatAST.val)
   elif a.kind == akString and b.kind == akInt:
     return stringAst(a.StringAST.val.repeat(b.IntAST.val))
+  elif a.kind == akArr and b.kind == akInt:
+    var r = a.ArrayAST.val
+    for i in 0..<b.IntAST.val:
+      r.add a.ArrayAST.val
+    return arrAst(r)
   else:
     raise newException(ValueError, "Cannot multiply " & a.astName & " by " & b.astName)
 
@@ -278,6 +312,8 @@ func `==`*(a, b: ASTRoot): ASTRoot =
     of akFloat: boolAst(a.FloatAST.val == b.FloatAST.val)
     of akBool: boolAst(a.BoolAST.val == b.BoolAST.val)
     of akString: boolAst(a.StringAST.val == b.StringAST.val)
+    of akArr: boolAst(a.ArrayAST.val == b.ArrayAST.val)
+    of akObj: boolAst(a.ObjectAST.val == b.ObjectAST.val)
     of akNull: boolAst(true)
     else: boolAst(a[] == b[])
 
@@ -327,7 +363,7 @@ func `[]`*(a, b: ASTRoot, env: Environment): ASTRoot =
       return a.ArrayAST.val[^(-b.IntAST.val)]
     else:
       return a.ArrayAST.val[b.IntAST.val]
-  if a.kind == akString and b.kind == akSliceExpr:
+  elif a.kind == akString and b.kind == akSliceExpr:
     let
       left = b.SliceExprAST.l.IntAST.val
       right = b.SliceExprAST.r.IntAST.val
@@ -339,7 +375,7 @@ func `[]`*(a, b: ASTRoot, env: Environment): ASTRoot =
       return stringAst($a.StringAST.val[left..^(-right)])
     else:
       return stringAst($a.StringAST.val[left..right])
-  if a.kind == akArr and b.kind == akSliceExpr:
+  elif a.kind == akArr and b.kind == akSliceExpr:
     let
       left = b.SliceExprAST.l.IntAST.val
       right = b.SliceExprAST.r.IntAST.val
@@ -357,6 +393,15 @@ func `[]`*(a, b: ASTRoot, env: Environment): ASTRoot =
       return stringAst($a.StringAST.val[^(-b.IntAST.val)])
     else:
       return stringAst($a.StringAST.val[b.IntAST.val])
+  elif a.kind == akObj:
+    var res: ASTRoot
+    for i in a.ObjectAST.val:
+      if i.key == b.eval(env):
+        return i.val
+    raise newException(
+      ValueError,
+      "Can not get element by key " & b.astValue(env) & " in dict " & a.astValue(env)
+    )
   raise newException(
     ValueError,
     "Can not get element from " & a.astValue(env) & " at index " & b.astValue(env)
@@ -370,6 +415,12 @@ func `[]=`*(a, b: ASTRoot, env: Environment, val: ASTRoot) =
       a.ArrayAST.val[^(-b.IntAST.val)] = val
     else:
       a.ArrayAST.val[b.IntAST.val] = val
+  elif a.kind == akObj:
+    var i = 0
+    while i < a.ObjectAST.val.len:
+      if a.ObjectAST.val[i].key == b:
+        a.ObjectAST.val[i].val = val
+      inc i
   else:
     raise newException(ValueError, "Can not change element of " & a.astName)
 
@@ -397,6 +448,14 @@ method eval*(self: SliceExprAST, env: Environment): ASTRoot =
 method eval*(self: ArrayAST, env: Environment): ASTRoot =
   for i in 0..<self.val.len:
     self.val[i] = self.val[i].eval(env)
+  return self
+
+method eval*(self: ObjectAST, env: Environment): ASTRoot =
+  var i = 0
+  while i < self.val.len:
+    self.val[i].key = self.val[i].key.eval(env)
+    self.val[i].val = self.val[i].val.eval(env)
+    inc i
   return self
 
 method eval*(self: BracketExprAST, env: Environment): ASTRoot =
@@ -629,7 +688,7 @@ method eval*(self: ForInStmt, env: Environment): ASTRoot =
     if i.kind != akVar:
       raise newException(
         RuntimeError,
-        "Can not iterate over " & self.obj.astValue(environment) &
+        "Can not iterate over " & obj.astValue(environment) &
         " via " & i.astValue(environment)
       )
   case self.vars.len:
@@ -652,7 +711,7 @@ method eval*(self: ForInStmt, env: Environment): ASTRoot =
           raise newException(
             RuntimeError,
             "Can not unpack " & $self.vars.len & " variables from " &
-            self.obj.astValue(env)
+            obj.astValue(env)
           )
     of 2:
       let
@@ -673,11 +732,11 @@ method eval*(self: ForInStmt, env: Environment): ASTRoot =
           raise newException(
             RuntimeError,
             "Can not unpack " & $self.vars.len & " variables from " &
-            self.obj.astValue(env)
+            obj.astValue(env)
           )
     else:
       raise newException(
         RuntimeError,
         "Can not unpack " & $self.vars.len & " variables from " &
-        self.obj.astValue(env)
+        obj.astValue(env)
       )

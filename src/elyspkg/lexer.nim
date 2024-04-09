@@ -24,6 +24,7 @@ type
     tkOp,  # +, -, /, *, ^, %, =
     tkKeyword,  # if, elif, else, while, for
     tkSep,  # ; and \n
+    tkComment,
     tkUnknown  # otherwise
   Token* = object
     kind*: TokenKind
@@ -80,7 +81,7 @@ func parseForTokens*(source: string): seq[Token] =
     i = 0
     # One-line comments
     if src.findRe(re2"^(#[^\n]+)", m):
-      let token = tkn(src, m, i, tkFloat)
+      let token = tkn(src, m, i, tkComment)
     # Strings
     elif src[0] == '\'':
       result.add parseString(src, '\'')

@@ -1,5 +1,6 @@
 import
   options,
+  tables,
   strutils
 
 
@@ -7,7 +8,7 @@ type
   ASTKind* {.size: sizeof(int8).} = enum
     akRoot,
     akExpr, akNull, akInt, akFloat, akBool, akString, akArr, akVar, akBinOp, akUnaryOp,
-    akTernary, akBracketExpr, akSliceExpr, akNot,
+    akTernary, akBracketExpr, akSliceExpr, akNot, akObj,
     akEof,
     akStmt, akStmtList, akAssign, akPrint, akIncDec, akElifBranch, akElseBranch,
     akIfStmt, akBreak, akContinue, akWhile, akAssignBracket, akSwap, akForInStmt
@@ -56,6 +57,8 @@ type
     val*: string
   ArrayAST* = ref object of ASTExpr
     val*: seq[ASTRoot]
+  ObjectAST* = ref object of ASTExpr
+    val*: seq[tuple[key, val: ASTRoot]]
   BracketExprAST* = ref object of ASTExpr
     index*: ASTRoot
     expr*: ASTRoot
@@ -163,6 +166,8 @@ func `$`*(ast: ASTRoot): string =
     of akBreak: "BreakStmt()"
     of akContinue: "ContinueStmt()"
     of akArr: "ArrayAST(" & ast.ArrayAST.val.join(", ") & ")"
+    of akObj:
+      "ObjectAST(" & $ast.ObjectAST.val & ")"
     of akBracketExpr:
       "BracketExprAST(" & $ast.BracketExprAST.expr & ", " &
       $ast.BracketExprAST.index & ", " & $ast.BracketExprAST.indexes & ")"

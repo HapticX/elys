@@ -120,7 +120,7 @@ suite "Elys":
     print "Hello, world!"[3..]
     print "'" + "Hello, world!"[3..5] + "'" + " is not " + "'" + "Hello, world"[3..<5] + "'"
 
-    # and ...
+    # and ... 💀
     print [
       [1 2 3]
       [4 5 6]
@@ -165,4 +165,43 @@ suite "Elys":
     for i, v in "hello" {
       print i, v
     }
+
+    # and ... 💀
+    for v in {
+      var y = if (false) {
+        {var x = 0 x}..{var x = 10 x}
+      } else {
+        {var x = 0 x}..<{var x = 10 x}
+      }
+      y
+    } {
+      print v
+    }
+    """)
+  
+  test "dictionaries":
+    exec("""
+    var x = {
+      "hello": "world",
+      123: true,
+      false: on,
+      12039: {
+        "0": [
+          {
+            # and ... 💀
+            "x": {
+              var x = 0;
+              x++;
+              x
+            }
+          } {
+            [1 2 3]: true
+          }
+        ]
+      }
+    }
+    print x
+    x[false] = [1 2 3 4 5]
+    x[off] = 'it\'s like false :)'
+    print x
     """)
