@@ -204,4 +204,5 @@ suite "Elys":
     x[false] = [1 2 3 4 5]
     x[off] = 'it\'s like false :)'
     print x
+    print x[12039]['0'][0]["x"]
     """)
