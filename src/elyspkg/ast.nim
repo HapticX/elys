@@ -127,6 +127,12 @@ template whileStmt*(c: ASTRoot, b: ASTRoot): WhileStmt =
 template forInStmt*(v: seq[ASTRoot], o, b: ASTRoot): ForInStmt =
   ForInStmt(vars: v, obj: o, body: b, kind: akForInStmt)
 
+template funcStmt*(n: string, a: ArrayAST, kwa: ObjectAST, b: ASTRoot): FuncStmt =
+  FuncStmt(name: n, args: a, kwargs: kwa, body: b, kind: akFunc)
+
+template callAst*(n: string, a: ArrayAST, kwa: ObjectAST): CallExprAST =
+  CallExprAST(name: n, args: a, kwargs: kwa, kind: akCallExpr)
+
 template swap*(left, right, toLeft, toRight: ASTRoot): SwapStmt =
   SwapStmt(l: left, r: right, toL: toLeft, toR: toRight, kind: akSwap)
 
@@ -159,6 +165,7 @@ func astName*(a: ASTRoot): string =
     of akSliceExpr: "slice" # 0..10
     of akArr: "array" # []
     of akObj: "dict" # {}
+    of akFunc: "function"
     else: "object"
 
 
@@ -199,6 +206,7 @@ func astValue*(a: ASTRoot, env: Environment): string =
           res &= ", "
         inc i
       "{" & res & "}"
+    of akFunc: "function " & a.FuncStmt.name
     else: "object"
 
 
@@ -457,6 +465,57 @@ method eval*(self: ObjectAST, env: Environment): ASTRoot =
     self.val[i].val = self.val[i].val.eval(env)
     inc i
   return self
+
+method eval*(self: FuncStmt, env: Environment): ASTRoot =
+  env.vars[self.name] = EnvVar(val: self)
+  nullAst()
+
+method eval*(self: CallExprAST, env: Environment): ASTRoot =
+  if not env.vars.hasKey(self.name):
+    raise newException(RuntimeError, "function " & self.name & " is not exists")
+  if env.vars[self.name].val.kind != akFunc:
+    raise newException(RuntimeError, self.name & " is not a function")
+  var
+    environment = newEnv(env)
+    function = env.vars[self.name].val.FuncStmt
+    args = env.vars[self.name].val.FuncStmt.args.val
+    kwargs = env.vars[self.name].val.FuncStmt.kwargs.val
+  if args.len != self.args.val.len and self.args.val.len > args.len + kwargs.len:
+    raise newException(
+      RuntimeError,
+      $self.args.val.len & " arguments were passed, but " & $args.len & " were expected"
+    )
+  var index = 0
+  let
+    argsLen = args.len
+    kwargsLen = kwargs.len
+    selfArgsLen = self.args.val.len
+  for i in self.args.val:
+    if index < argsLen:
+      environment.vars[args[index].VarAST.name] = EnvVar(val: i.eval(env).ASTExpr)
+    else:
+      environment.vars[kwargs[-(-(index-selfArgsLen)-kwargsLen)].key.VarAST.name] = EnvVar(val: i.eval(env).ASTExpr)
+    inc index
+  for i in self.kwargs.val:
+    var keyIsValid = false
+    for j in kwargs:
+      if i.key == j.key:
+        keyIsValid = true
+        break
+    if not keyIsValid:
+      raise newException(
+        RuntimeError,
+        "the function does not have a " & i.key.VarAST.name & " argument"
+      )
+    environment.vars[i.key.VarAST.name] = EnvVar(val: i.val.eval(env).ASTExpr)
+  # set kwargs from function
+  for i in kwargs:
+    let key = i.key.VarAST.name
+    if not environment.vars.hasKey(key):
+      environment.vars[key] = EnvVar(val: i.val.eval(env).ASTExpr)
+    elif environment.vars[key].topLvl:
+      environment.vars[key] = EnvVar(val: i.val.eval(env).ASTExpr)
+  return function.body.eval(environment)
 
 method eval*(self: BracketExprAST, env: Environment): ASTRoot =
   let

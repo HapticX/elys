@@ -13,7 +13,8 @@ when isMainModule:
 
 func compile(code: string): ASTRoot =
   let tokens = code.parseForTokens
-  # echo tokens
+  # {.cast(noSideEffect).}:
+  #   echo tokens
   let parsed = tokens.elysParser
   if parsed.isSome:
     var env = newEnv()

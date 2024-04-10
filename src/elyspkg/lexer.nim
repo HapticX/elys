@@ -50,20 +50,22 @@ else:
     inc i, val.len
 
 
-func parseString(source: string, symbol: char): Token =
-  result = Token(value: $symbol, kind: tkString)
+func parseString(source: string, symbol: char): tuple[t: Token, i: int] =
   var
     i = 0
     src = source[1..^1]
+    r = Token(value: $symbol, kind: tkString)
   for s in src:
     if s == symbol and i > 0 and src[i-1] == '\\':
-      result.value &= s
+      r.value = r.value[0..^2] & s
     elif s == symbol:
-      result.value &= s
+      r.value &= s
+      inc i
       break
     else:
-      result.value &= s
+      r.value &= s
     inc i
+  (t: r, i: i+1)
 
 
 func parseForTokens*(source: string): seq[Token] =
@@ -84,14 +86,17 @@ func parseForTokens*(source: string): seq[Token] =
       let token = tkn(src, m, i, tkComment)
     # Strings
     elif src[0] == '\'':
-      result.add parseString(src, '\'')
-      inc i, result[^1].value.len
+      let str = parseString(src, '\'')
+      result.add str.t
+      inc i, str.i
     elif src[0] == '"':
-      result.add parseString(src, '"')
-      inc i, result[^1].value.len
+      let str = parseString(src, '"')
+      result.add str.t
+      inc i, str.i
     elif src[0] == '`':
-      result.add parseString(src, '`')
-      inc i, result[^1].value.len
+      let str = parseString(src, '`')
+      result.add str.t
+      inc i, str.i
     # Floats
     elif src.findRe(re2"^(\d+\.\d+)", m):
       result.add tkn(src, m, i, tkFloat)
@@ -115,7 +120,7 @@ func parseForTokens*(source: string): seq[Token] =
     elif src.findRe(re2"^(\b(true|false|on|off)\b)", m):
       result.add tkn(src, m, i, tkBool)
     # Keywords
-    elif src.findRe(re2"^(\b(if|elif|else|while|for|case|var|const|continue|break)\b)", m):
+    elif src.findRe(re2"^(\b(fn|if|elif|else|while|for|case|var|const|continue|break)\b)", m):
       result.add tkn(src, m, i, tkKeyword)
     elif src.findRe(re2"^(\b(print|null)\b)", m):
       result.add tkn(src, m, i, tkKeyword)

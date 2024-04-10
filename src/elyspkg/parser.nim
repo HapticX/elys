@@ -40,10 +40,10 @@ func exprPrecedenceLevels(): seq[seq[string]] =
   @[
     @["*", "/", "//"],
     @["+", "-", "%"],
-    @["and", "&&"],
+    @["==", "!=", ">=", "<=", "<", ">"],
     @["or", "||"],
-    @["in"],
-    @["==", "!=", ">=", "<=", "<", ">"]
+    @["and", "&&"],
+    @["in"]
   ]
 func incDecOperators(): seq[string] =
   @["--", "++"]
@@ -152,6 +152,59 @@ func sliceExpr(): Combinator =
   ) ^ processSliceExpr
 
 
+func processSimpleFuncExpr(res: Result): Option[Result] =
+  var
+    args = arrAst(@[])
+    kwargs = objAst(@[])
+  for i in res.valy.arr:
+    if i.valy.kind == rkStr:
+      args.val.add i.valx.ast
+    else:
+      kwargs.val.add (key: i.valx.ast, val: i.valy.valy.ast)
+  astRes(callAst(res.valx.val.get, args, kwargs))
+func simpleFuncExpr(): Combinator =
+  (
+    idTag() + (
+      (operator"(" + repSep(
+        lazy(expr) + opt(operator"=" + lazy(expr)),
+        operator","
+      ) + operator")") ^ processGroup
+    )
+  ) ^ processSimpleFuncExpr
+
+
+func processCastFuncExpr(res: Result): Option[Result] =
+  astRes(callAst(res.valy.val.get, arrAst(@[res.valx.ast]), objAst(@[])))
+func castFuncExpr(): Combinator =
+  (
+    ((
+      operator"(" + expr() + operator")"
+    ) ^ processGroup) + idTag()
+  ) ^ processCastFuncExpr
+
+
+func processMethodCallExpr(res: Result): Option[Result] =
+  var
+    args = arrAst(@[res.valx.valx.valx.ast])
+    kwargs = objAst(@[])
+  for i in res.valy.arr:
+    if i.valy.kind == rkStr:
+      args.val.add i.valx.ast
+    else:
+      kwargs.val.add (key: i.valx.ast, val: i.valy.valy.ast)
+  astRes(callAst(res.valx.valy.val.get, args, kwargs))
+  # astRes(callAst(res.valy.val.get, arrAst(@[res.valx.ast]), objAst(@[])))
+func methodCallExpr(): Combinator =
+  (
+    lazy(exprTermPre) + operator"." + idTag() + ((
+      operator"(" + repSep(
+        expr() + opt(operator"=" + lazy(expr)),
+        operator","
+      ) + operator")"
+    ) ^ processGroup)
+  ) ^ processMethodCallExpr
+
+
 func exprTermPre(): Combinator =
   (
     exprGroup() |
@@ -167,6 +220,9 @@ func exprTermPre(): Combinator =
 
 func exprTerm(): Combinator =
   (
+    lazy(methodCallExpr) |
+    lazy(castFuncExpr) |
+    lazy(simpleFuncExpr) |
     lazy(bracketExpr) |
     lazy(sliceExpr) |
     lazy(exprObject) |
@@ -242,9 +298,9 @@ func printStmt(): Combinator =
   # print x, y, z
   (
     keyword"print" + alt(
+      opt(repSep(expr(), operator",")),
       (operator"(" + opt(
           repSep(expr(), operator",")) + operator")") ^ processGroup,
-      opt(repSep(expr(), operator",")),
     )
   ) ^ processPrint
 
@@ -287,6 +343,33 @@ func ifStatement(): Combinator =
       keyword"else" + stmts
     )
   ) ^ processIfStmt
+
+
+func processFuncStatement(res: Result): Option[Result] =
+  var
+    args: ArrayAST = arrAst(@[])
+    kwargs: ObjectAST = objAst(@[])
+  for i in res.valx.valy.arr:
+    if i.valy.kind == rkStr:
+      args.val.add i.valx.ast
+    else:
+      kwargs.val.add (key: i.valx.ast, val: i.valy.valy.ast)
+  astRes(funcStmt(
+    res.valx.valx.valy.val.get, args, kwargs, res.valy.ast
+  ))
+func funcStatement(): Combinator =
+  let
+    args = repSep(
+      (idTag() ^ processVar) + opt(operator"=" + expr()),
+      operator","
+    )
+  (
+    keyword"fn" + idTag() + (
+      (operator"(" + args + operator")") ^ processGroup
+    ) + (
+      ((operator"{" + opt(lazy(stmtList)) + operator"}") ^ processGroup)
+    )
+  ) ^ processFuncStatement
 
 
 func processEof(res: Result): Option[Result] =
@@ -377,6 +460,7 @@ func forInStatement(): Combinator =
 
 func stmt(): Combinator =
   (
+    funcStatement() |
     ifStatement() |
     forInStatement() |
     whileStatement() |

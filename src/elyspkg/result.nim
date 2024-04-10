@@ -8,10 +8,11 @@ type
   ASTKind* {.size: sizeof(int8).} = enum
     akRoot,
     akExpr, akNull, akInt, akFloat, akBool, akString, akArr, akVar, akBinOp, akUnaryOp,
-    akTernary, akBracketExpr, akSliceExpr, akNot, akObj,
+    akTernary, akBracketExpr, akSliceExpr, akNot, akObj, akCallExpr,
     akEof,
     akStmt, akStmtList, akAssign, akPrint, akIncDec, akElifBranch, akElseBranch,
-    akIfStmt, akBreak, akContinue, akWhile, akAssignBracket, akSwap, akForInStmt
+    akIfStmt, akBreak, akContinue, akWhile, akAssignBracket, akSwap, akForInStmt,
+    akFunc
   ASTRoot* = ref object of RootObj
     kind*: ASTKind
   ResultKind* {.size: sizeof(int8).} = enum
@@ -59,6 +60,10 @@ type
     val*: seq[ASTRoot]
   ObjectAST* = ref object of ASTExpr
     val*: seq[tuple[key, val: ASTRoot]]
+  CallExprAST* = ref object of ASTExpr
+    name*: string
+    args*: ArrayAST
+    kwargs*: ObjectAST
   BracketExprAST* = ref object of ASTExpr
     index*: ASTRoot
     expr*: ASTRoot
@@ -79,6 +84,11 @@ type
     op1*, op2*: string
   NotOp* = ref object of ASTExpr
     expr*: ASTRoot
+  FuncStmt* = ref object of ASTExpr
+    name*: string
+    args*: ArrayAST
+    kwargs*: ObjectAST
+    body*: ASTRoot
     
   Stmt* = ref object of ASTRoot
   EofStmt* = ref object of Stmt
@@ -171,6 +181,10 @@ func `$`*(ast: ASTRoot): string =
     of akBracketExpr:
       "BracketExprAST(" & $ast.BracketExprAST.expr & ", " &
       $ast.BracketExprAST.index & ", " & $ast.BracketExprAST.indexes & ")"
+    of akFunc:
+      "FuncStmt(" & ast.FuncStmt.name & ")"
+    of akCallExpr:
+      "CallExprAST(" & ast.CallExprAST.name & ")"
     of akSliceExpr:
       "SliceExprAST(" & $ast.SliceExprAST.l & ast.SliceExprAST.op &
       $ast.SliceExprAST.r & ")"
