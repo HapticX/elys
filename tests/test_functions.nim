@@ -38,4 +38,11 @@ suite "Elys":
       }
       x
     }.factorial()
+
+    fn test(s) {
+      s*2;
+    }
+
+    # calling functions with one string argument
+    print test"hello"
     """)

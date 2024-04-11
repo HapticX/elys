@@ -15,7 +15,9 @@ func compile(code: string): ASTRoot =
   let tokens = code.parseForTokens
   # {.cast(noSideEffect).}:
   #   echo tokens
-  let parsed = tokens.elysParser
+  var source: string = code
+  var sourcePointer: ptr string = addr source
+  let parsed = tokens.elysParser(sourcePointer)
   if parsed.isSome:
     var env = newEnv()
     discard parsed.get.ast.eval(env)

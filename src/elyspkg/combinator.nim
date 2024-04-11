@@ -2,7 +2,7 @@ import
   ./lexer,
   ./ast,
   ./result,
-  strutils,
+  ./utils,
   options
 
 
@@ -68,8 +68,8 @@ method `$`*(c: Phrase): string = "Phrase(" & $c.c & ")"
 
 {.experimental: "callOperator".}
 
-template `()`(obj: Combinator, tokens: seq[Token], pos: int): untyped =
-  obj.call(tokens, pos)
+template `()`(obj: Combinator, tokens: seq[Token], pos: int, source: ptr string): untyped =
+  obj.call(tokens, pos, source)
 
 
 func `+`*(left, right: Combinator): Concat =
@@ -84,70 +84,96 @@ func `^`*(c: Combinator, f: ProcessFunc): Process =
   Process(c: c, f: f)
 
 
-method call*(c: Combinator, tokens: seq[Token], pos: int): Option[Result] {.base.} =
+method call*(c: Combinator, tokens: seq[Token], pos: int, source: ptr string): Option[Result] {.base.} =
   return none[Result]()
 
 
-method call*(c: Reserved, tokens: seq[Token], pos: int): Option[Result] =
+method call*(c: Reserved, tokens: seq[Token], pos: int, source: ptr string): Option[Result] =
   if pos < tokens.len and tokens[pos].value == c.tkn.value and tokens[pos].kind == c.tkn.kind:
-    return Result(kind: rkStr, val: tokens[pos].value.some, pos: pos+1).some
+    return Result(
+      kind: rkStr, val: tokens[pos].value.some, pos: pos+1,
+      source: source, line: tokens[pos].line, col: tokens[pos].col
+    ).some
   return none[Result]()
 
-method call*(c: Tag, tokens: seq[Token], pos: int): Option[Result] =
+method call*(c: Tag, tokens: seq[Token], pos: int, source: ptr string): Option[Result] =
   if pos < tokens.len and tokens[pos].kind == c.kind:
-    return Result(kind: rkStr, val: tokens[pos].value.some, pos: pos+1).some
+    return Result(
+      kind: rkStr, val: tokens[pos].value.some, pos: pos+1,
+      source: source, line: tokens[pos].line, col: tokens[pos].col
+    ).some
   return none[Result]()
 
-method call*(c: Concat, tokens: seq[Token], pos: int): Option[Result] =
-  let left = c.left(tokens, pos)
+method call*(c: Concat, tokens: seq[Token], pos: int, source: ptr string): Option[Result] =
+  let left = c.left(tokens, pos, source)
   if left.isSome:
-    let right = c.right(tokens, left.get.pos)
+    let right = c.right(tokens, left.get.pos, source)
     if right.isSome:
-      return Result(kind: rkPair, valx: left.get, valy: right.get, pos: right.get.pos).some
+      return Result(
+        kind: rkPair, valx: left.get, valy: right.get,
+        pos: right.get.pos, source: source, line: left.get.line, col: left.get.col
+      ).some
   return none[Result]()
 
-method call*(c: Alt, tokens: seq[Token], pos: int): Option[Result] =
-  let left = c.left(tokens, pos)
+method call*(c: Alt, tokens: seq[Token], pos: int, source: ptr string): Option[Result] =
+  let left = c.left(tokens, pos, source)
   if left.isSome:
     return left
-  return c.right(tokens, pos)
+  return c.right(tokens, pos, source)
 
-method call*(c: Opt, tokens: seq[Token], pos: int): Option[Result] =
-  let res = c.c(tokens, pos)
+method call*(c: Opt, tokens: seq[Token], pos: int, source: ptr string): Option[Result] =
+  let res = c.c(tokens, pos, source)
   if res.isSome:
     return res
-  return Result(kind: rkStr, val: none[string](), pos: pos).some
+  return Result(
+    kind: rkStr, val: none[string](), pos: pos,
+    source: source, line: 1, col: 1
+  ).some
 
-method call*(c: Rep, tokens: seq[Token], pos: int): Option[Result] =
+method call*(c: Rep, tokens: seq[Token], pos: int, source: ptr string): Option[Result] =
   var
-    res = c.c(tokens, pos)
+    res = c.c(tokens, pos, source)
     arr: seq[Result] = @[]
     i = pos
+    line = 1
+    col = 1
   while res.isSome:
+    line = res.get.line
+    col = res.get.col
     arr.add res.get
     i = res.get.pos
-    res = c.c(tokens, i)
-  Result(kind: rkArr, arr: arr, pos: i).some
+    res = c.c(tokens, i, source)
+  Result(
+    kind: rkArr, arr: arr, pos: i,
+    source: source, line: line, col: col
+  ).some
 
-method call*(c: RepSep, tokens: seq[Token], pos: int): Option[Result] =
+method call*(c: RepSep, tokens: seq[Token], pos: int, source: ptr string): Option[Result] =
   var
-    res = c.c(tokens, pos)
+    res = c.c(tokens, pos, source)
     arr: seq[Result] = @[]
     i = pos
     sep: Option[Result]
+    line = 1
+    col = 1
   while res.isSome:
+    line = res.get.line
+    col = res.get.col
     arr.add res.get
     i = res.get.pos
-    sep = c.sep(tokens, i)
+    sep = c.sep(tokens, i, source)
     if sep.isSome:
       i = sep.get.pos
-      res = c.c(tokens, i)
+      res = c.c(tokens, i, source)
     else:
       break
-  Result(kind: rkArr, arr: arr, pos: i).some
+  Result(
+    kind: rkArr, arr: arr, pos: i,
+    source: source, line: line, col: col
+  ).some
 
-method call*(c: Process, tokens: seq[Token], pos: int): Option[Result] =
-  var res = c.c(tokens, pos)
+method call*(c: Process, tokens: seq[Token], pos: int, source: ptr string): Option[Result] =
+  var res = c.c(tokens, pos, source)
   if res.isSome:
     let position = res.get.pos
     res = c.f(res.get)
@@ -155,11 +181,14 @@ method call*(c: Process, tokens: seq[Token], pos: int): Option[Result] =
     return res
   return none[Result]()
 
-method call*(c: Exp, tokens: seq[Token], pos: int): Option[Result] =
-  var res = c.c(tokens, pos)
+method call*(c: Exp, tokens: seq[Token], pos: int, source: ptr string): Option[Result] =
+  var res = c.c(tokens, pos, source)
 
   proc process_next_exp(r: Result): Option[Result] =
-    r.valx.valfn(Result(kind: rkPair, valx: res.get, valy: r.valy))
+    r.valx.valfn(Result(
+      kind: rkPair, valx: res.get, valy: r.valy,
+      source: source, line: r.line, col: r.col
+    ))
   
   var
     next_c =
@@ -169,30 +198,30 @@ method call*(c: Exp, tokens: seq[Token], pos: int): Option[Result] =
         c.c ^ process_next_exp
     next_res = res
   while next_res.isSome:
-    next_res = next_c(tokens, res.get.pos)
+    next_res = next_c(tokens, res.get.pos, source)
     if next_res.isSome:
       res = next_res
   return res
 
-method call*(c: Lazy, tokens: seq[Token], pos: int): Option[Result] =
+method call*(c: Lazy, tokens: seq[Token], pos: int, source: ptr string): Option[Result] =
   if c.c.isNone:
     c.c = c.c_func().some
-  return c.c.get()(tokens, pos)
+  return c.c.get()(tokens, pos, source)
 
-method call*(c: Phrase, tokens: seq[Token], pos: int): Option[Result] =
-  let res = c.c(tokens, pos)
+method call*(c: Phrase, tokens: seq[Token], pos: int, source: ptr string): Option[Result] =
+  let res = c.c(tokens, pos, source)
   if res.isSome and res.get.pos == tokens.len:
     return res
   elif res.isSome:
     if res.get.kind == rkAst:
-      raise newException(
-        RuntimeError,
-        "error at " & $res.get.pos & " token - " & res.get.getVal & " (" & $res.get.ast.kind & ")"
+      syntaxError(
+        "Error at " & $res.get.pos & " token (" & $res.get.ast.kind & ")",
+        tokens[res.get.pos].line, tokens[res.get.pos].col, source
       )
     else:
-      raise newException(
-        RuntimeError,
-        "error at " & $res.get.pos & " token. " & res.get.getVal
+      syntaxError(
+        "Error at " & $res.get.pos & " token.",
+        tokens[res.get.pos].line, tokens[res.get.pos].col, source,
       )
   else:
-    raise newException(RuntimeError, "Runtime error")
+    elysError("Unknown error.", 0, 0, source)

@@ -24,7 +24,7 @@ print('Hello, world!')
 ```
 
 
-## Variables
+## Variables 🧩
 
 **Elys** supports two types of variables - `var` and `const`.
 
@@ -38,4 +38,29 @@ const y = 20
 
 x = 20  # success
 y = 10  # error
+```
+
+## If Statements
+
+```elys
+if (2 + 2 * 2 == 8) {  # Order of operations as in math
+  print('nope, 2 + 2 * 2 is 6 :(')
+} elif (2 + 2 * 2 == 6) {
+  print('yeap, 2 + 2 * 2 is 6!')
+} else {
+  print('???')
+}
+```
+
+You can also use if statements as an expression to obtain a result for a variable:
+
+```elys
+var x = if (false) {
+  0
+} elif (false) {
+  1
+} else {
+  2
+}
+print x
 ```

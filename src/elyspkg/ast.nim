@@ -1,8 +1,8 @@
 import
   ./result,
+  ./utils,
   macros,
   strutils,
-  sequtils,
   hashes,
   tables,
   options
@@ -228,14 +228,20 @@ func toBoolean*(a: ASTRoot, env: Environment = nil): ASTRoot =
       return boolAst(false)
     else:
       if not env.isNil:
-        raise newException(RuntimeError, "Can not get boolean from " & $a.astValue(env))
+        valueError(
+          "Can not get boolean from " & $a.astValue(env),
+          a.line, a.col, a.code
+        )
 
 
 converter toBool*(ast: ASTRoot): bool =
   ast.toBoolean().BoolAST.val
 
 
-func `+`(a, b: ASTRoot): ASTRoot =
+func `+`(l, r: ASTRoot, env: Environment): ASTRoot =
+  let
+    a = l.eval(env)
+    b = r.eval(env)
   if a.kind == akInt and b.kind == akInt:
     return intAst(a.IntAST.val + b.IntAST.val)
   elif a.kind == akInt and b.kind == akFloat:
@@ -247,10 +253,16 @@ func `+`(a, b: ASTRoot): ASTRoot =
   elif a.kind == akString and b.kind == akString:
     return stringAst(a.StringAST.val & b.StringAST.val)
   else:
-    raise newException(ValueError, "Cannot plus " & a.astName & " to " & b.astName)
+    valueError(
+      "Can not add " & b.astName & " to " & a.astName,
+      l.line, l.col, a.code 
+    )
 
 
-func `-`(a, b: ASTRoot): ASTRoot =
+func `-`(l, r: ASTRoot, env: Environment): ASTRoot =
+  let
+    a = l.eval(env)
+    b = r.eval(env)
   if a.kind == akInt and b.kind == akInt:
     return intAst(a.IntAST.val - b.IntAST.val)
   elif a.kind == akInt and b.kind == akFloat:
@@ -260,10 +272,16 @@ func `-`(a, b: ASTRoot): ASTRoot =
   elif a.kind == akFloat and b.kind == akFloat:
     return floatAst(a.FloatAST.val - b.FloatAST.val)
   else:
-    raise newException(ValueError, "Cannot minus " & b.astName & " from " & a.astName)
+    valueError(
+      "Can not substract " & b.astName & " from " & a.astName,
+      l.line, l.col, l.code 
+    )
 
 
-func `*`*(a, b: ASTRoot): ASTRoot =
+func `*`*(l, r: ASTRoot, env: Environment): ASTRoot =
+  let
+    a = l.eval(env)
+    b = r.eval(env)
   if a.kind == akInt and b.kind == akInt:
     return intAst(a.IntAST.val * b.IntAST.val)
   elif a.kind == akInt and b.kind == akFloat:
@@ -275,15 +293,21 @@ func `*`*(a, b: ASTRoot): ASTRoot =
   elif a.kind == akString and b.kind == akInt:
     return stringAst(a.StringAST.val.repeat(b.IntAST.val))
   elif a.kind == akArr and b.kind == akInt:
-    var r = a.ArrayAST.val
+    var res = a.ArrayAST.val
     for i in 0..<b.IntAST.val:
-      r.add a.ArrayAST.val
-    return arrAst(r)
+      res.add a.ArrayAST.val
+    return arrAst(res)
   else:
-    raise newException(ValueError, "Cannot multiply " & a.astName & " by " & b.astName)
+    valueError(
+      "Can not multiply " & a.astName & " multiply " & b.astName,
+      l.line, l.col, l.code 
+    )
 
 
-func `/`*(a, b: ASTRoot): ASTRoot =
+func `/`*(l, r: ASTRoot, env: Environment): ASTRoot =
+  let
+    a = l.eval(env)
+    b = r.eval(env)
   if a.kind == akInt and b.kind == akInt:
     return floatAST(a.IntAST.val / b.IntAST.val)
   elif a.kind == akInt and b.kind == akFloat:
@@ -293,26 +317,44 @@ func `/`*(a, b: ASTRoot): ASTRoot =
   elif a.kind == akFloat and b.kind == akFloat:
     return floatAst(a.FloatAST.val / b.FloatAST.val)
   else:
-    raise newException(ValueError, "Cannot divide " & a.astName & " by " & b.astName)
+    valueError(
+      "Can not divide " & a.astName & " by " & a.astName,
+      l.line, l.col, l.code 
+    )
 
 
-func `//`*(a, b: ASTRoot): ASTRoot =
+func `//`*(l, r: ASTRoot, env: Environment): ASTRoot =
+  let
+    a = l.eval(env)
+    b = r.eval(env)
   if a.kind == akInt and b.kind == akInt:
     return intAST(a.IntAST.val div b.IntAST.val)
   elif a.kind == akInt and b.kind == akFloat:
     return intAst(a.FloatAST.val.int div b.IntAST.val)
   else:
-    raise newException(ValueError, "Cannot divide " & a.astName & " by " & b.astName)
+    valueError(
+      "Can not divide " & a.astName & " by " & a.astName,
+      l.line, l.col, l.code 
+    )
 
 
-func `%`*(a, b: ASTRoot): ASTRoot =
+func `%`*(l, r: ASTRoot, env: Environment): ASTRoot =
+  let
+    a = l.eval(env)
+    b = r.eval(env)
   if a.kind == akInt and b.kind == akInt:
     return intAst(a.IntAST.val mod b.IntAST.val)
   else:
-    raise newException(ValueError, "Cannot get mod of " & b.astName & " from " & a.astName)
+    valueError(
+      "Can not get module " & b.astName & " from " & a.astName,
+      l.line, l.col, l.code 
+    )
 
 
-func `==`*(a, b: ASTRoot): ASTRoot =
+func `==`*(l, r: ASTRoot, env: Environment): ASTRoot =
+  let
+    a = l.eval(env)
+    b = r.eval(env)
   if a.kind != b.kind:
     return boolAst(false)
   case a.kind:
@@ -326,11 +368,14 @@ func `==`*(a, b: ASTRoot): ASTRoot =
     else: boolAst(a[] == b[])
 
 
-func `!=`*(a, b: ASTRoot): ASTRoot =
-  boolAst(not (a == b).BoolAST.val)
+func `!=`*(a, b: ASTRoot, env: Environment): ASTRoot =
+  boolAst(not `==`(a, b, env).BoolAST.val)
 
 
-func `>`*(a, b: ASTRoot): ASTRoot =
+func `>`*(l, r: ASTRoot, env: Environment): ASTRoot =
+  let
+    a = l.eval(env)
+    b = r.eval(env)
   if a.kind == akInt and b.kind == akInt:
     return boolAst(a.IntAST.val > b.IntAST.val)
   elif a.kind == akFloat and b.kind == akFloat:
@@ -339,21 +384,22 @@ func `>`*(a, b: ASTRoot): ASTRoot =
     return boolAst(a.IntAST.val.float > b.FloatAST.val)
   elif a.kind == akFloat and b.kind == akInt:
     return boolAst(a.FloatAST.val > b.IntAST.val.float)
-  raise newException(
-    ValueError, "Can not compare " & $a & " with " & $a
+  valueError(
+    "Can not get compare " & a.astName & " with " & b.astName,
+    l.line, l.col, l.code 
   )
 
 
-func `>=`*(a, b: ASTRoot): ASTRoot =
-  boolAst((a == b).BoolAST.val or (a > b).BoolAST.val)
+func `>=`*(a, b: ASTRoot, env: Environment): ASTRoot =
+  boolAst(`==`(a, b, env).BoolAST.val or `>`(a, b, env).BoolAST.val)
 
 
-func `<`*(a, b: ASTRoot): ASTRoot =
-  boolAst(not (a >= b).BoolAST.val)
+func `<`*(a, b: ASTRoot, env: Environment): ASTRoot =
+  boolAst(not `>=`(a, b, env).BoolAST.val)
 
 
-func `<=`*(a, b: ASTRoot): ASTRoot =
-  boolAst((a == b).BoolAST.val or (a < b).BoolAST.val)
+func `<=`*(a, b: ASTRoot, env: Environment): ASTRoot =
+  boolAst(`==`(a, b, env).BoolAST.val or `<`(a, b, env).BoolAST.val)
 
 
 func `and`*(a, b: ASTRoot): ASTRoot =
@@ -364,7 +410,10 @@ func `or`*(a, b: ASTRoot): ASTRoot =
   boolAst(a.BoolAST.val or b.BoolAST.val)
 
 
-func `[]`*(a, b: ASTRoot, env: Environment): ASTRoot =
+func `[]`*(l, r: ASTRoot, env: Environment): ASTRoot =
+  let
+    a = l.eval(env)
+    b = r.eval(env)
   if a.kind == akArr and b.kind == akInt:
     let idx = b.IntAST.val
     if idx < 0:
@@ -402,21 +451,20 @@ func `[]`*(a, b: ASTRoot, env: Environment): ASTRoot =
     else:
       return stringAst($a.StringAST.val[b.IntAST.val])
   elif a.kind == akObj:
-    var res: ASTRoot
     for i in a.ObjectAST.val:
-      if i.key == b.eval(env):
+      if `==`(i.key, b, env):
         return i.val
-    raise newException(
-      ValueError,
-      "Can not get element by key " & b.astValue(env) & " in dict " & a.astValue(env)
+    valueError(
+      "Can not get element by key " & b.astValue(env) & " in dict " & a.astValue(env),
+      r.line, r.col, r.code 
     )
-  raise newException(
-    ValueError,
-    "Can not get element from " & a.astValue(env) & " at index " & b.astValue(env)
+  valueError(
+    "Can not get element from " & a.astValue(env) & " at index " & b.astValue(env),
+      r.line, r.col, r.code 
   )
 
 
-func `[]=`*(a, b: ASTRoot, env: Environment, val: ASTRoot) =
+func `[]=`*(a, b: ASTRoot, env: Environment, line, col: int, code: ptr string, val: ASTRoot) =
   if a.kind == akArr and b.kind == akInt:
     let idx = b.IntAST.val
     if idx < 0:
@@ -426,14 +474,17 @@ func `[]=`*(a, b: ASTRoot, env: Environment, val: ASTRoot) =
   elif a.kind == akObj:
     var i = 0
     while i < a.ObjectAST.val.len:
-      if a.ObjectAST.val[i].key == b:
+      if `==`(a.ObjectAST.val[i].key, b, env):
         a.ObjectAST.val[i].val = val
       inc i
   else:
-    raise newException(ValueError, "Can not change element of " & a.astName)
+    valueError(
+      "Can not change element of " & a.astName,
+      line, col, code
+    )
 
 
-evalFor NullAST: nullAst()
+evalFor NullAST: self
 evalFor IntAST: self
 evalFor FloatAST: self
 evalFor StringAST: self
@@ -448,9 +499,15 @@ method eval*(self: SliceExprAST, env: Environment): ASTRoot =
       binOpAst(self.r, intAst(1), "-").eval(env)
   self.op = ".."
   if self.l.kind notin {akInt}:
-    raise newException(ValueError, "Can not to use " & self.l.astValue(env) & " in slice")
+    valueError(
+      "Can not to use " & self.l.astValue(env) & " in slice",
+      self.l.line, self.l.col, self.l.code
+    )
   if self.r.kind notin {akInt}:
-    raise newException(ValueError, "Can not to use " & self.r.astValue(env) & " in slice")
+    valueError(
+      "Can not to use " & self.r.astValue(env) & " in slice",
+      self.r.line, self.r.col, self.r.code
+    )
   return self
 
 method eval*(self: ArrayAST, env: Environment): ASTRoot =
@@ -481,9 +538,9 @@ method eval*(self: CallExprAST, env: Environment): ASTRoot =
     args = env.vars[self.name].val.FuncStmt.args.val
     kwargs = env.vars[self.name].val.FuncStmt.kwargs.val
   if args.len != self.args.val.len and self.args.val.len > args.len + kwargs.len:
-    raise newException(
-      RuntimeError,
-      $self.args.val.len & " arguments were passed, but " & $args.len & " were expected"
+    valueError(
+      $self.args.val.len & " arguments were passed, but " & $args.len & " were expected",
+      self.line, self.col, self.code
     )
   var index = 0
   let
@@ -499,13 +556,13 @@ method eval*(self: CallExprAST, env: Environment): ASTRoot =
   for i in self.kwargs.val:
     var keyIsValid = false
     for j in kwargs:
-      if i.key == j.key:
+      if i.key.VarAST.name == j.key.VarAST.name:
         keyIsValid = true
         break
     if not keyIsValid:
-      raise newException(
-        RuntimeError,
-        "the function does not have a " & i.key.VarAST.name & " argument"
+      valueError(
+        "the function does not have a " & i.key.VarAST.name & " argument",
+        self.line, self.col, self.code
       )
     environment.vars[i.key.VarAST.name] = EnvVar(val: i.val.eval(env).ASTExpr)
   # set kwargs from function
@@ -518,16 +575,19 @@ method eval*(self: CallExprAST, env: Environment): ASTRoot =
   return function.body.eval(environment)
 
 method eval*(self: BracketExprAST, env: Environment): ASTRoot =
-  let
-    expr = self.expr.eval(env)
-    index = self.index.eval(env)
-  result = expr[index, env]
+  result = self.expr[self.index, env]
   for i in self.indexes:
     result = result[i.eval(env), env]
+  result.line = self.line
+  result.col = self.col
+
 
 method eval*(self: VarAST, env: Environment): ASTRoot =
   if not env.vars.hasKey(self.name):
-    raise newException(RuntimeError, "Variable " & self.name & " was not assigned before")
+    valueError(
+      "Variable " & self.name & " was not assigned before",
+      self.line, self.col, self.code
+    )
   env.vars[self.name].val
 
 method eval*(self: UnaryOpAST, env: Environment): ASTRoot =
@@ -538,7 +598,10 @@ method eval*(self: UnaryOpAST, env: Environment): ASTRoot =
   elif val.kind == akFloat:
     val.FloatAST.val = -val.FloatAST.val
     return val
-  raise newException(RuntimeError, "Can not to apply unary operator '" & self.op & "' to " & $self.expr)
+  valueError(
+    "Can not to apply unary operator '" & self.op & "' to " & $self.expr,
+    self.line, self.col, self.code
+  )
 
 method eval*(self: IncDecStmt, env: Environment): ASTRoot =
   let val = self.expr.eval(env)
@@ -550,7 +613,10 @@ method eval*(self: IncDecStmt, env: Environment): ASTRoot =
       elif val.kind == akFloat:
         val.FloatAST.val = val.FloatAST.val + 1f
         return val
-      raise newException(RuntimeError, "Can not increase " & $self.expr)
+      valueError(
+        "Can not increase " & $self.expr,
+        self.line, self.col, self.code
+      )
     of "--":
       if val.kind == akInt:
         val.IntAST.val = val.IntAST.val - 1
@@ -561,9 +627,15 @@ method eval*(self: IncDecStmt, env: Environment): ASTRoot =
       elif val.kind == akString:
         val.StringAST.val = val.StringAST.val[0..^2]
         return val
-      raise newException(RuntimeError, "Can not decrease " & $self.expr)
+      valueError(
+        "Can not decrease " & $self.expr,
+        self.line, self.col, self.code
+      )
     else:
-      raise newException(RuntimeError, "Unknown inc/dec operator '" & self.op & "' for " & $self.expr)
+      valueError(
+        "Unknown inc/dec operator '" & self.op & "' for " & $self.expr,
+        self.line, self.col, self.code
+      )
 
 method eval*(self: StmtList, env: Environment): ASTRoot =
   var environment = newEnv(env)
@@ -576,45 +648,51 @@ method eval*(self: StmtList, env: Environment): ASTRoot =
 
 method eval(self: BinOpAST, env: Environment): ASTRoot =
   let
-    left = self.l.eval(env)
-    right = self.r.eval(env)
+    left = self.l
+    right = self.r
   case self.op:
     of "+":
-      return `+`(left, right)
+      return `+`(left, right, env)
     of "-":
-      return `-`(left, right)
+      return `-`(left, right, env)
     of "*":
-      return `*`(left, right)
+      return `*`(left, right, env)
     of "/":
-      return `/`(left, right)
+      return `/`(left, right, env)
     of "%":
-      return `%`(left, right)
+      return `%`(left, right, env)
     of "//":
-      return `//`(left, right)
+      return `//`(left, right, env)
     of "and", "&&":
-      return left and right
+      return left.eval(env) and right.eval(env)
     of "or", "||":
-      return left or right
+      return left.eval(env) or right.eval(env)
     of "==":
-      return `==`(left, right)
+      return `==`(left, right, env)
     of "!=":
-      return `!=`(left, right)
+      return `!=`(left, right, env)
     of ">":
-      return `>`(left, right)
+      return `>`(left, right, env)
     of "<":
-      return `<`(left, right)
+      return `<`(left, right, env)
     of ">=":
-      return `>=`(left, right)
+      return `>=`(left, right, env)
     of "<=":
-      return `<=`(left, right)
-  raise newException(RuntimeError, "Unknown operator: '" & self.op & "'")
+      return `<=`(left, right, env)
+  syntaxError(
+    "Unknown operator: '" & self.op & "'",
+    left.line, left.col, left.code
+  )
 
 method eval*(self: AssignStmt, env: Environment): ASTRoot =
   if self.isAssign and self.assignOp == "=":
     # var x = y
     # const x = y
     if env.vars.hasKey(self.name) and not env.vars[self.name].topLvl:
-      raise newException(RuntimeError, "Variable " & self.name & " was assigned before")
+      valueError(
+        "Variable " & self.name & " was assigned before",
+        self.line, self.col, self.code
+      )
     env.vars[self.name] = EnvVar(
       val: self.expr.eval(env).ASTExpr,
       isConst: self.isConst,
@@ -624,18 +702,30 @@ method eval*(self: AssignStmt, env: Environment): ASTRoot =
     # x += y
     # x //= 2
     if not env.vars.hasKey(self.name):
-      raise newException(RuntimeError, "Variable " & self.name & " was not assigned before")
+      valueError(
+        "Variable " & self.name & " was not assigned before",
+        self.line, self.col, self.code
+      )
     if env.vars[self.name].isConst:
-      raise newException(RuntimeError, "Const " & self.name & " can not be modified")
+      valueError(
+        "Const " & self.name & " can not be modified",
+        self.line, self.col, self.code
+      )
     env.vars[self.name].val = binOpAst(
       env.vars[self.name].val, self.expr, self.assignOp[0..^2]
     ).eval(env).ASTExpr
   elif not self.isAssign:
     # x = y
     if not env.vars.hasKey(self.name):
-      raise newException(RuntimeError, "Variable " & self.name & " was not assigned before")
+      valueError(
+        "Variable " & self.name & " was not assigned before",
+        self.line, self.col, self.code
+      )
     if env.vars[self.name].isConst:
-      raise newException(RuntimeError, "Const " & self.name & " can not be modified")
+      valueError(
+        "Const " & self.name & " can not be modified",
+        self.line, self.col, self.code
+      )
     env.vars[self.name].val = self.expr.eval(env).ASTExpr
   nullAst()
 
@@ -646,7 +736,7 @@ method eval*(self: AssignBracketStmt, env: Environment): ASTRoot =
       if self.op == "":
         self.val.eval(env)
       else:
-        binOpAst(self.expr.eval(env), self.val.eval(env), self.op)
+        binOpAst(self.expr.eval(env), self.val.eval(env), self.op).eval(env)
   var values: seq[tuple[i: ASTRoot, v: ASTRoot]] = @[
     (intAst(-1).ASTRoot, self.expr.expr.eval(env)),
   ]
@@ -657,7 +747,7 @@ method eval*(self: AssignBracketStmt, env: Environment): ASTRoot =
     values.add (index, values[^1].v[index, env])
   values[^1].v = val
   for i in countdown(values.len-2, 0):
-    values[i].v[values[i+1].i, env] = values[i+1].v
+    values[i].v[values[i+1].i, env, self.expr.line, self.expr.col, self.expr.code] = values[i+1].v
   nullAst()
 
 
@@ -719,7 +809,10 @@ method eval*(self: ContinueStmt, env: Environment): ASTRoot =
 
 method eval*(self: SwapStmt, env: Environment): ASTRoot =
   if self.l.kind != self.r.kind or self.toL.kind != self.toR.kind:
-    raise newException(RuntimeError, "Can not swap different types")
+    valueError(
+      "Can not swap different types",
+      self.l.line, self.l.col, self.l.code
+    )
   case self.l.kind:
     of akVar:
       let
@@ -734,7 +827,10 @@ method eval*(self: SwapStmt, env: Environment): ASTRoot =
       discard assignBracket(self.l.BracketExprAST, l, "=").eval(env)
       discard assignBracket(self.r.BracketExprAST, r, "=").eval(env)
     else:
-      raise newException(RuntimeError, "Can not swap this")
+      valueError(
+        "Can not swap this",
+        self.l.line, self.l.col, self.l.code
+      )
   nullAst()
 
 method eval*(self: ForInStmt, env: Environment): ASTRoot =
@@ -745,10 +841,10 @@ method eval*(self: ForInStmt, env: Environment): ASTRoot =
   # check for variables
   for i in self.vars:
     if i.kind != akVar:
-      raise newException(
-        RuntimeError,
+      valueError(
         "Can not iterate over " & obj.astValue(environment) &
-        " via " & i.astValue(environment)
+        " via " & i.astValue(environment),
+        self.line, self.col, self.code
       )
   case self.vars.len:
     of 1:
@@ -767,10 +863,10 @@ method eval*(self: ForInStmt, env: Environment): ASTRoot =
             environment.setDef(variable, stringAst($i))
             discard self.body.eval(environment)
         else:
-          raise newException(
-            RuntimeError,
+          valueError(
             "Can not unpack " & $self.vars.len & " variables from " &
-            obj.astValue(env)
+            obj.astValue(env),
+            self.line, self.col, self.code
           )
     of 2:
       let
@@ -788,14 +884,14 @@ method eval*(self: ForInStmt, env: Environment): ASTRoot =
             environment.setDef(variable1, intAst(index))
             discard self.body.eval(environment)
         else:
-          raise newException(
-            RuntimeError,
+          valueError(
             "Can not unpack " & $self.vars.len & " variables from " &
-            obj.astValue(env)
+            obj.astValue(env),
+            self.line, self.col, self.code
           )
     else:
-      raise newException(
-        RuntimeError,
+      valueError(
         "Can not unpack " & $self.vars.len & " variables from " &
-        obj.astValue(env)
+        obj.astValue(env),
+        self.line, self.col, self.code
       )

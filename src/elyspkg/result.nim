@@ -1,6 +1,5 @@
 import
   options,
-  tables,
   strutils
 
 
@@ -15,6 +14,8 @@ type
     akFunc
   ASTRoot* = ref object of RootObj
     kind*: ASTKind
+    line*, col*: int
+    code*: ptr string
   ResultKind* {.size: sizeof(int8).} = enum
     rkStr,
     rkPair,
@@ -45,6 +46,8 @@ type
       of rkAst:
         ast*: ASTRoot
     pos*: int
+    source*: ptr string
+    line*, col*: int
 
   ASTExpr* = ref object of ASTRoot
   NullAST* = ref object of ASTExpr
@@ -134,13 +137,18 @@ type
     data*: seq[Result]
 
 
-func astRes*(ast: ASTRoot): Option[Result] =
-  Result(kind: rkAst, ast: ast).some
+func astRes*(ast: ASTRoot, line, col: int, src: ptr string): Option[Result] =
+  ast.line = line
+  ast.col = col
+  ast.code = src
+  Result(kind: rkAst, ast: ast, source: src, line: line, col: col).some
 
-func fnRes*(function: ResultFunc): Option[Result] =
+func fnRes*(function: ResultFunc, line, col: int, src: ptr string): Option[Result] =
   Result(
     kind: rkFun,
-    valfn: function
+    valfn: function,
+    line: line, col: col,
+    source: src
   ).some
 
 func `$`*(res: Result): string
@@ -184,7 +192,7 @@ func `$`*(ast: ASTRoot): string =
     of akFunc:
       "FuncStmt(" & ast.FuncStmt.name & ")"
     of akCallExpr:
-      "CallExprAST(" & ast.CallExprAST.name & ")"
+      "CallExprAST(" & ast.CallExprAST.name & ", " & $ast.CallExprAST.args & ")"
     of akSliceExpr:
       "SliceExprAST(" & $ast.SliceExprAST.l & ast.SliceExprAST.op &
       $ast.SliceExprAST.r & ")"

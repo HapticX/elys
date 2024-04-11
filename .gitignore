@@ -1,6 +1,8 @@
 # Builds
 *.exe
 *.js
+*.dll
+*.so
 
 # Cache
 cache/
