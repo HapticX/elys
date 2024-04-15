@@ -44,8 +44,8 @@ jobs:
       - name: Unix build
         run: |
           cd src/
-          nim c -d:danger -d:strip --os:linux --cpu:amd64 -d:mingw --passC:-flto --passL:-flto --out:../bin/linux/x64/elys elys
-          nim c -d:danger -d:strip --os:linux --cpu:i386 -d:mingw --passC:-flto --passL:-flto --out:../bin/linux/x86/elys elys
+          nim c -d:danger -d:strip --cpu:amd64 --passC:-flto --passL:-flto --out:../bin/linux/x64/elys elys
+          nim c -d:danger -d:strip --cpu:i386 --passC:-flto --passL:-flto --out:../bin/linux/x86/elys elys
       
       - uses: actions/upload-artifact@v4
         with:

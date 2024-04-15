@@ -685,10 +685,11 @@ method eval(self: BinOpAST, env: Environment): ASTRoot =
       return `>=`(left, right, env)
     of "<=":
       return `<=`(left, right, env)
-  syntaxError(
-    "Unknown operator: '" & self.op & "'",
-    left.line, left.col, left.code, left.filepath
-  )
+    else:
+      syntaxError(
+        "Unknown operator: '" & self.op & "'",
+        left.line, left.col, left.code, left.filepath
+      )
 
 method eval*(self: AssignStmt, env: Environment): ASTRoot =
   if self.isAssign and self.assignOp == "=":
