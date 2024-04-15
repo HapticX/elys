@@ -32,7 +32,7 @@ jobs:
       
       - name: Install Dependencies 🔨
         run: |
-          apt install mingw-w64
+          sudo apt install mingw-w64
           mkdir bin/
       
       - name: Windows build
