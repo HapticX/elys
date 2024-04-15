@@ -1,0 +1,72 @@
+on:
+  push
+
+name: Build CLI 🧪
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os:
+          - ubuntu-latest
+        nim_version:
+          - '2.0.2'
+    env:
+      TIMEOUT_EXIT_STATUS: 124
+    steps:
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Cache nimble
+        id: cache-nimble
+        uses: actions/cache@v4
+        with:
+          path: ~/.nimble
+          key: ${{ runner.os }}-nimble-${{ hashFiles('*.nimble') }}
+      
+      - uses: jiro4989/setup-nim-action@v1
+        with:
+          nim-version: ${{ matrix.nim_version }}
+      
+      - name: Install Dependencies 🔨
+        run: |
+          apt install mingw-w64
+          mkdir bin/
+      
+      - name: Windows build
+        run: |
+          cd src/
+          nim c -d:danger -d:strip --os:windows --cpu:amd64 -d:mingw --passC:-flto --passL:-flto --out:../bin/win/x64/elys.exe elys
+          nim c -d:danger -d:strip --os:windows --cpu:i386 -d:mingw --passC:-flto --passL:-flto --out:../bin/win/x86/elys.exe elys
+      
+      - name: Unix build
+        run: |
+          cd src/
+          nim c -d:danger -d:strip --os:linux --cpu:amd64 -d:mingw --passC:-flto --passL:-flto --out:../bin/linux/x64/elys elys
+          nim c -d:danger -d:strip --os:linux --cpu:i386 -d:mingw --passC:-flto --passL:-flto --out:../bin/linux/x86/elys elys
+      
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-x64
+          path: |
+            bin/win/x64/elys.exe
+      
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-x86
+          path: |
+            bin/win/x86/elys.exe
+      
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-x64
+          path: |
+            bin/linux/x64/elys
+      
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-x86
+          path: |
+            bin/linux/x86/elys

@@ -15,7 +15,7 @@ type
   ASTRoot* = ref object of RootObj
     kind*: ASTKind
     line*, col*: int
-    code*: ptr string
+    code*, filepath*: ptr string
   ResultKind* {.size: sizeof(int8).} = enum
     rkStr,
     rkPair,
@@ -46,7 +46,7 @@ type
       of rkAst:
         ast*: ASTRoot
     pos*: int
-    source*: ptr string
+    source*, filepath*: ptr string
     line*, col*: int
 
   ASTExpr* = ref object of ASTRoot
@@ -137,18 +137,19 @@ type
     data*: seq[Result]
 
 
-func astRes*(ast: ASTRoot, line, col: int, src: ptr string): Option[Result] =
+func astRes*(ast: ASTRoot, line, col: int, src, filepath: ptr string): Option[Result] =
   ast.line = line
   ast.col = col
   ast.code = src
-  Result(kind: rkAst, ast: ast, source: src, line: line, col: col).some
+  ast.filepath = filepath
+  Result(kind: rkAst, ast: ast, source: src, filepath: filepath, line: line, col: col).some
 
-func fnRes*(function: ResultFunc, line, col: int, src: ptr string): Option[Result] =
+func fnRes*(function: ResultFunc, line, col: int, src, filepath: ptr string): Option[Result] =
   Result(
     kind: rkFun,
     valfn: function,
     line: line, col: col,
-    source: src
+    source: src, filepath: filepath
   ).some
 
 func `$`*(res: Result): string

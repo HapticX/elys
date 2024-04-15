@@ -1,67 +1,17 @@
-fn sum(n: int) -> int {
-    if n <= 0 {
-        # You don't need to use return if this is the last expression
-        0
-    }
-    result = 0
-    for i in 1..n {
-        if i % 3 == 0 || i % 5 == 0 {
-            result += i
-        }
-        else {
-            continue
-        }
-    }
-    # You don't need to use return or specify the last expression
-    # if the variable result is defined
+print("Hello, world!")
+
+fn factorial(n) {
+  if n > 1 {
+    n * factorial(n-1)
+  } else {
+    1
+  }
 }
 
-# Taking input from the user
-print("Enter a number: ")
-number = input()
+print 5.factorial()
 
-# Converting the entered string into an integer
-# We can call the function in different ways
-# For example:
-#   int(number)
-#   number.int()
-#   number.int
-#   (int) number
-#   int:
-#       number
-#   int number
-number = number.int
-
-# Calling the function to compute the sum
-result = sum(number)
-
-# Displaying the result
-print("Sum of numbers divisible by 3 or 5 from 1 to ", number, " is ", result)
-
-
-class Animal {
-    # Public field
-    sound: string
-    # Private field
-    priv age: int
-    # Protected field
-    prot name: string
-    
-    # Public method
-    fn say() -> void {
-        # self is a hidden variable
-        print(self.sound)
-    }
-
-    # Private method
-    priv fn getAge() -> int {
-        # You can use either self or this
-        this.age
-    }
-
-    # Protected method
-    # Parentheses can be omitted if there are no arguments
-    prot fn getName -> string {
-        this.name
-    }
+var x = 0
+while x < 10 {
+  x++
 }
+print x

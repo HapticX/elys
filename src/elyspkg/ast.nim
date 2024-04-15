@@ -230,7 +230,7 @@ func toBoolean*(a: ASTRoot, env: Environment = nil): ASTRoot =
       if not env.isNil:
         valueError(
           "Can not get boolean from " & $a.astValue(env),
-          a.line, a.col, a.code
+          a.line, a.col, a.code, a.filepath
         )
 
 
@@ -255,7 +255,7 @@ func `+`(l, r: ASTRoot, env: Environment): ASTRoot =
   else:
     valueError(
       "Can not add " & b.astName & " to " & a.astName,
-      l.line, l.col, a.code 
+      l.line, l.col, a.code, l.filepath
     )
 
 
@@ -274,7 +274,7 @@ func `-`(l, r: ASTRoot, env: Environment): ASTRoot =
   else:
     valueError(
       "Can not substract " & b.astName & " from " & a.astName,
-      l.line, l.col, l.code 
+      l.line, l.col, l.code, l.filepath
     )
 
 
@@ -300,7 +300,7 @@ func `*`*(l, r: ASTRoot, env: Environment): ASTRoot =
   else:
     valueError(
       "Can not multiply " & a.astName & " multiply " & b.astName,
-      l.line, l.col, l.code 
+      l.line, l.col, l.code, l.filepath
     )
 
 
@@ -319,7 +319,7 @@ func `/`*(l, r: ASTRoot, env: Environment): ASTRoot =
   else:
     valueError(
       "Can not divide " & a.astName & " by " & a.astName,
-      l.line, l.col, l.code 
+      l.line, l.col, l.code, l.filepath
     )
 
 
@@ -334,7 +334,7 @@ func `//`*(l, r: ASTRoot, env: Environment): ASTRoot =
   else:
     valueError(
       "Can not divide " & a.astName & " by " & a.astName,
-      l.line, l.col, l.code 
+      l.line, l.col, l.code, l.filepath
     )
 
 
@@ -347,7 +347,7 @@ func `%`*(l, r: ASTRoot, env: Environment): ASTRoot =
   else:
     valueError(
       "Can not get module " & b.astName & " from " & a.astName,
-      l.line, l.col, l.code 
+      l.line, l.col, l.code, l.filepath
     )
 
 
@@ -386,7 +386,7 @@ func `>`*(l, r: ASTRoot, env: Environment): ASTRoot =
     return boolAst(a.FloatAST.val > b.IntAST.val.float)
   valueError(
     "Can not get compare " & a.astName & " with " & b.astName,
-    l.line, l.col, l.code 
+    l.line, l.col, l.code, l.filepath
   )
 
 
@@ -456,15 +456,15 @@ func `[]`*(l, r: ASTRoot, env: Environment): ASTRoot =
         return i.val
     valueError(
       "Can not get element by key " & b.astValue(env) & " in dict " & a.astValue(env),
-      r.line, r.col, r.code 
+      r.line, r.col, r.code, r.filepath
     )
   valueError(
     "Can not get element from " & a.astValue(env) & " at index " & b.astValue(env),
-      r.line, r.col, r.code 
+      r.line, r.col, r.code, r.filepath
   )
 
 
-func `[]=`*(a, b: ASTRoot, env: Environment, line, col: int, code: ptr string, val: ASTRoot) =
+func `[]=`*(a, b: ASTRoot, env: Environment, line, col: int, code, filepath: ptr string, val: ASTRoot) =
   if a.kind == akArr and b.kind == akInt:
     let idx = b.IntAST.val
     if idx < 0:
@@ -480,7 +480,7 @@ func `[]=`*(a, b: ASTRoot, env: Environment, line, col: int, code: ptr string, v
   else:
     valueError(
       "Can not change element of " & a.astName,
-      line, col, code
+      line, col, code, filepath
     )
 
 
@@ -501,12 +501,12 @@ method eval*(self: SliceExprAST, env: Environment): ASTRoot =
   if self.l.kind notin {akInt}:
     valueError(
       "Can not to use " & self.l.astValue(env) & " in slice",
-      self.l.line, self.l.col, self.l.code
+      self.l.line, self.l.col, self.l.code, self.l.filepath
     )
   if self.r.kind notin {akInt}:
     valueError(
       "Can not to use " & self.r.astValue(env) & " in slice",
-      self.r.line, self.r.col, self.r.code
+      self.r.line, self.r.col, self.r.code, self.r.filepath
     )
   return self
 
@@ -529,9 +529,15 @@ method eval*(self: FuncStmt, env: Environment): ASTRoot =
 
 method eval*(self: CallExprAST, env: Environment): ASTRoot =
   if not env.vars.hasKey(self.name):
-    raise newException(RuntimeError, "function " & self.name & " is not exists")
+    valueError(
+      "function " & self.name & " is not exists",
+      self.line, self.col, self.code, self.filepath
+    )
   if env.vars[self.name].val.kind != akFunc:
-    raise newException(RuntimeError, self.name & " is not a function")
+    valueError(
+      self.name & " is not a function",
+      self.line, self.col, self.code, self.filepath
+    )
   var
     environment = newEnv(env)
     function = env.vars[self.name].val.FuncStmt
@@ -540,7 +546,7 @@ method eval*(self: CallExprAST, env: Environment): ASTRoot =
   if args.len != self.args.val.len and self.args.val.len > args.len + kwargs.len:
     valueError(
       $self.args.val.len & " arguments were passed, but " & $args.len & " were expected",
-      self.line, self.col, self.code
+      self.line, self.col, self.code, self.filepath
     )
   var index = 0
   let
@@ -562,7 +568,7 @@ method eval*(self: CallExprAST, env: Environment): ASTRoot =
     if not keyIsValid:
       valueError(
         "the function does not have a " & i.key.VarAST.name & " argument",
-        self.line, self.col, self.code
+        self.line, self.col, self.code, self.filepath
       )
     environment.vars[i.key.VarAST.name] = EnvVar(val: i.val.eval(env).ASTExpr)
   # set kwargs from function
@@ -584,9 +590,9 @@ method eval*(self: BracketExprAST, env: Environment): ASTRoot =
 
 method eval*(self: VarAST, env: Environment): ASTRoot =
   if not env.vars.hasKey(self.name):
-    valueError(
+    usedBeforeAssign(
       "Variable " & self.name & " was not assigned before",
-      self.line, self.col, self.code
+      self.line, self.col, self.code, self.filepath
     )
   env.vars[self.name].val
 
@@ -600,7 +606,7 @@ method eval*(self: UnaryOpAST, env: Environment): ASTRoot =
     return val
   valueError(
     "Can not to apply unary operator '" & self.op & "' to " & $self.expr,
-    self.line, self.col, self.code
+    self.line, self.col, self.code, self.filepath
   )
 
 method eval*(self: IncDecStmt, env: Environment): ASTRoot =
@@ -615,7 +621,7 @@ method eval*(self: IncDecStmt, env: Environment): ASTRoot =
         return val
       valueError(
         "Can not increase " & $self.expr,
-        self.line, self.col, self.code
+        self.line, self.col, self.code, self.filepath
       )
     of "--":
       if val.kind == akInt:
@@ -629,12 +635,12 @@ method eval*(self: IncDecStmt, env: Environment): ASTRoot =
         return val
       valueError(
         "Can not decrease " & $self.expr,
-        self.line, self.col, self.code
+        self.line, self.col, self.code, self.filepath
       )
     else:
       valueError(
         "Unknown inc/dec operator '" & self.op & "' for " & $self.expr,
-        self.line, self.col, self.code
+        self.line, self.col, self.code, self.filepath
       )
 
 method eval*(self: StmtList, env: Environment): ASTRoot =
@@ -681,7 +687,7 @@ method eval(self: BinOpAST, env: Environment): ASTRoot =
       return `<=`(left, right, env)
   syntaxError(
     "Unknown operator: '" & self.op & "'",
-    left.line, left.col, left.code
+    left.line, left.col, left.code, left.filepath
   )
 
 method eval*(self: AssignStmt, env: Environment): ASTRoot =
@@ -689,9 +695,9 @@ method eval*(self: AssignStmt, env: Environment): ASTRoot =
     # var x = y
     # const x = y
     if env.vars.hasKey(self.name) and not env.vars[self.name].topLvl:
-      valueError(
+      assignedBefore(
         "Variable " & self.name & " was assigned before",
-        self.line, self.col, self.code
+        self.line, self.col, self.code, self.filepath
       )
     env.vars[self.name] = EnvVar(
       val: self.expr.eval(env).ASTExpr,
@@ -702,14 +708,14 @@ method eval*(self: AssignStmt, env: Environment): ASTRoot =
     # x += y
     # x //= 2
     if not env.vars.hasKey(self.name):
-      valueError(
+      usedBeforeAssign(
         "Variable " & self.name & " was not assigned before",
-        self.line, self.col, self.code
+        self.line, self.col, self.code, self.filepath
       )
     if env.vars[self.name].isConst:
       valueError(
         "Const " & self.name & " can not be modified",
-        self.line, self.col, self.code
+        self.line, self.col, self.code, self.filepath
       )
     env.vars[self.name].val = binOpAst(
       env.vars[self.name].val, self.expr, self.assignOp[0..^2]
@@ -717,14 +723,14 @@ method eval*(self: AssignStmt, env: Environment): ASTRoot =
   elif not self.isAssign:
     # x = y
     if not env.vars.hasKey(self.name):
-      valueError(
+      usedBeforeAssign(
         "Variable " & self.name & " was not assigned before",
-        self.line, self.col, self.code
+        self.line, self.col, self.code, self.filepath
       )
     if env.vars[self.name].isConst:
       valueError(
         "Const " & self.name & " can not be modified",
-        self.line, self.col, self.code
+        self.line, self.col, self.code, self.filepath
       )
     env.vars[self.name].val = self.expr.eval(env).ASTExpr
   nullAst()
@@ -747,7 +753,11 @@ method eval*(self: AssignBracketStmt, env: Environment): ASTRoot =
     values.add (index, values[^1].v[index, env])
   values[^1].v = val
   for i in countdown(values.len-2, 0):
-    values[i].v[values[i+1].i, env, self.expr.line, self.expr.col, self.expr.code] = values[i+1].v
+    values[i].v[
+      values[i+1].i, env,
+      self.expr.line, self.expr.col, self.expr.code,
+      self.expr.filepath
+    ] = values[i+1].v
   nullAst()
 
 
@@ -811,7 +821,7 @@ method eval*(self: SwapStmt, env: Environment): ASTRoot =
   if self.l.kind != self.r.kind or self.toL.kind != self.toR.kind:
     valueError(
       "Can not swap different types",
-      self.l.line, self.l.col, self.l.code
+      self.l.line, self.l.col, self.l.code, self.l.filepath
     )
   case self.l.kind:
     of akVar:
@@ -829,7 +839,7 @@ method eval*(self: SwapStmt, env: Environment): ASTRoot =
     else:
       valueError(
         "Can not swap this",
-        self.l.line, self.l.col, self.l.code
+        self.l.line, self.l.col, self.l.code, self.l.filepath
       )
   nullAst()
 
@@ -844,7 +854,7 @@ method eval*(self: ForInStmt, env: Environment): ASTRoot =
       valueError(
         "Can not iterate over " & obj.astValue(environment) &
         " via " & i.astValue(environment),
-        self.line, self.col, self.code
+        self.line, self.col, self.code, self.filepath
       )
   case self.vars.len:
     of 1:
@@ -866,7 +876,7 @@ method eval*(self: ForInStmt, env: Environment): ASTRoot =
           valueError(
             "Can not unpack " & $self.vars.len & " variables from " &
             obj.astValue(env),
-            self.line, self.col, self.code
+            self.line, self.col, self.code, self.filepath
           )
     of 2:
       let
@@ -887,11 +897,11 @@ method eval*(self: ForInStmt, env: Environment): ASTRoot =
           valueError(
             "Can not unpack " & $self.vars.len & " variables from " &
             obj.astValue(env),
-            self.line, self.col, self.code
+            self.line, self.col, self.code, self.filepath
           )
     else:
       valueError(
         "Can not unpack " & $self.vars.len & " variables from " &
         obj.astValue(env),
-        self.line, self.col, self.code
+        self.line, self.col, self.code, self.filepath
       )

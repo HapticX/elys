@@ -3,21 +3,29 @@ import
   ./elyspkg/parser,
   ./elyspkg/ast,
   ./elyspkg/result,
-  options
+  options,
+  strutils,
+  os
 
 
 when isMainModule:
   import
-    terminal
+    terminal,
+    std/cmdline,
+    parseopt
+  const VERSION = "0.4.0"
 
 
-func compile(code: string): ASTRoot =
+func compile(code: string, file: string = "$file"): ASTRoot =
   let tokens = code.parseForTokens
   # {.cast(noSideEffect).}:
   #   echo tokens
-  var source: string = code
-  var sourcePointer: ptr string = addr source
-  let parsed = tokens.elysParser(sourcePointer)
+  var
+    source: string = code
+    sourcePointer: ptr string = addr source
+    filepath: string = file
+    filepathPointer: ptr string = addr filepath
+  let parsed = tokens.elysParser(sourcePointer, filepathPointer)
   if parsed.isSome:
     var env = newEnv()
     discard parsed.get.ast.eval(env)
@@ -28,15 +36,54 @@ func exec*(code: string): ASTRoot {.discardable, exportc.} =
 
 
 when isMainModule:
-  const VERSION = "0.4.0"
+  proc run(file: string, params: seq[string]): int =
+    let filepath =
+      if file.endsWith(".elys"):
+        file
+      else:
+        file & ".elys"
+    let filename = getCurrentDir() / filepath
+    var
+      f = open(filepath, fmRead)
+      source = f.readAll()
+    f.close()
+    discard compile(source, filename)
+    QuitSuccess
 
-  styledEcho fgRed, "      _           "
-  styledEcho fgRed, "  ___| |_   _ ___ "
-  styledEcho fgRed, " / _ \\ | | | / __|"
-  styledEcho fgRed, "|  __/ | |_| \\__ \\"
-  styledEcho fgRed, " \\___|_|\\__, |___/"
-  styledEcho fgRed, "        |___/     "
-  echo ""
+  proc main(version = false): int =
+    ## Elys language CLI
+    if not version:
+      styledEcho fgRed, "      _           "
+      styledEcho fgRed, "  ___| |_   _ ___ "
+      styledEcho fgRed, " / _ \\ | | | / __|"
+      styledEcho fgRed, "|  __/ | |_| \\__ \\"
+      styledEcho fgRed, " \\___|_|\\__, |___/"
+      styledEcho fgRed, "        |___/     "
+      echo ""
+    styledEcho fgMagenta, "Elys scripting language ", fgYellow, "v", VERSION, fgMagenta, " by HapticX"
+    QuitSuccess
+  
+  proc helpMessage(): int =
+    styledEcho fgMagenta, "Elys CLI"
+    echo ""
+    echo "Usage:"
+    echo "  -h | --help    - shows this message"
+    echo "  -v | --version - shows version"
+    QuitSuccess
+  
+  let
+    params = commandLineParams()
+    p = initOptParser(params)
+  # echo params
+  # echo p
 
-  styledEcho fgMagenta, "Elys scripting language ", fgYellow, "v", VERSION, fgMagenta, " by HapticX"
-
+  if "-v" in params or "--version" in params:
+    quit(main(true))
+  elif "-h" in params or "--help" in params:
+    quit(helpMessage())
+  elif params.len > 0 and not params[^1].startsWith("-"):
+    quit(run(params[^1], params[0..^2]))
+  elif params.len == 0:
+    quit(main())
+  else:
+    styledEcho fgRed, "Unknown command. ", fgYellow, "Try elys --help"

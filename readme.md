@@ -40,7 +40,7 @@ x = 20  # success
 y = 10  # error
 ```
 
-## If Statements
+## If Statements ❓
 
 ```elys
 if (2 + 2 * 2 == 8) {  # Order of operations as in math
@@ -62,5 +62,21 @@ var x = if (false) {
 } else {
   2
 }
-print x
+print x  # will be 2
+```
+
+## Cycles 🔄
+
+Elys provides `for` and `while` cycles:
+
+```elys
+for i in 0..<10 {
+  print i  # will shows numbers from 0 to 9
+}
+
+var x = 0
+while x < 10 {
+  x++
+}
+print x  # will be 10
 ```

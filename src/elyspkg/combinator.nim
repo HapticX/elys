@@ -1,6 +1,5 @@
 import
   ./lexer,
-  ./ast,
   ./result,
   ./utils,
   options
@@ -68,8 +67,8 @@ method `$`*(c: Phrase): string = "Phrase(" & $c.c & ")"
 
 {.experimental: "callOperator".}
 
-template `()`(obj: Combinator, tokens: seq[Token], pos: int, source: ptr string): untyped =
-  obj.call(tokens, pos, source)
+template `()`(obj: Combinator, tokens: seq[Token], pos: int, source, filepath: ptr string): untyped =
+  obj.call(tokens, pos, source, filepath)
 
 
 func `+`*(left, right: Combinator): Concat =
@@ -84,55 +83,56 @@ func `^`*(c: Combinator, f: ProcessFunc): Process =
   Process(c: c, f: f)
 
 
-method call*(c: Combinator, tokens: seq[Token], pos: int, source: ptr string): Option[Result] {.base.} =
+method call*(c: Combinator, tokens: seq[Token], pos: int, source, filepath: ptr string): Option[Result] {.base.} =
   return none[Result]()
 
 
-method call*(c: Reserved, tokens: seq[Token], pos: int, source: ptr string): Option[Result] =
+method call*(c: Reserved, tokens: seq[Token], pos: int, source, filepath: ptr string): Option[Result] =
   if pos < tokens.len and tokens[pos].value == c.tkn.value and tokens[pos].kind == c.tkn.kind:
     return Result(
       kind: rkStr, val: tokens[pos].value.some, pos: pos+1,
-      source: source, line: tokens[pos].line, col: tokens[pos].col
+      source: source, filepath: filepath, line: tokens[pos].line, col: tokens[pos].col
     ).some
   return none[Result]()
 
-method call*(c: Tag, tokens: seq[Token], pos: int, source: ptr string): Option[Result] =
+method call*(c: Tag, tokens: seq[Token], pos: int, source, filepath: ptr string): Option[Result] =
   if pos < tokens.len and tokens[pos].kind == c.kind:
     return Result(
       kind: rkStr, val: tokens[pos].value.some, pos: pos+1,
-      source: source, line: tokens[pos].line, col: tokens[pos].col
+      source: source, filepath: filepath, line: tokens[pos].line, col: tokens[pos].col
     ).some
   return none[Result]()
 
-method call*(c: Concat, tokens: seq[Token], pos: int, source: ptr string): Option[Result] =
-  let left = c.left(tokens, pos, source)
+method call*(c: Concat, tokens: seq[Token], pos: int, source, filepath: ptr string): Option[Result] =
+  let left = c.left(tokens, pos, source, filepath)
   if left.isSome:
-    let right = c.right(tokens, left.get.pos, source)
+    let right = c.right(tokens, left.get.pos, source, filepath)
     if right.isSome:
       return Result(
         kind: rkPair, valx: left.get, valy: right.get,
-        pos: right.get.pos, source: source, line: left.get.line, col: left.get.col
+        pos: right.get.pos, source: source, filepath: filepath,
+        line: left.get.line, col: left.get.col
       ).some
   return none[Result]()
 
-method call*(c: Alt, tokens: seq[Token], pos: int, source: ptr string): Option[Result] =
-  let left = c.left(tokens, pos, source)
+method call*(c: Alt, tokens: seq[Token], pos: int, source, filepath: ptr string): Option[Result] =
+  let left = c.left(tokens, pos, source, filepath)
   if left.isSome:
     return left
-  return c.right(tokens, pos, source)
+  return c.right(tokens, pos, source, filepath)
 
-method call*(c: Opt, tokens: seq[Token], pos: int, source: ptr string): Option[Result] =
-  let res = c.c(tokens, pos, source)
+method call*(c: Opt, tokens: seq[Token], pos: int, source, filepath: ptr string): Option[Result] =
+  let res = c.c(tokens, pos, source, filepath)
   if res.isSome:
     return res
   return Result(
     kind: rkStr, val: none[string](), pos: pos,
-    source: source, line: 1, col: 1
+    source: source, filepath: filepath, line: 1, col: 1
   ).some
 
-method call*(c: Rep, tokens: seq[Token], pos: int, source: ptr string): Option[Result] =
+method call*(c: Rep, tokens: seq[Token], pos: int, source, filepath: ptr string): Option[Result] =
   var
-    res = c.c(tokens, pos, source)
+    res = c.c(tokens, pos, source, filepath)
     arr: seq[Result] = @[]
     i = pos
     line = 1
@@ -142,15 +142,15 @@ method call*(c: Rep, tokens: seq[Token], pos: int, source: ptr string): Option[R
     col = res.get.col
     arr.add res.get
     i = res.get.pos
-    res = c.c(tokens, i, source)
+    res = c.c(tokens, i, source, filepath)
   Result(
     kind: rkArr, arr: arr, pos: i,
     source: source, line: line, col: col
   ).some
 
-method call*(c: RepSep, tokens: seq[Token], pos: int, source: ptr string): Option[Result] =
+method call*(c: RepSep, tokens: seq[Token], pos: int, source, filepath: ptr string): Option[Result] =
   var
-    res = c.c(tokens, pos, source)
+    res = c.c(tokens, pos, source, filepath)
     arr: seq[Result] = @[]
     i = pos
     sep: Option[Result]
@@ -161,19 +161,19 @@ method call*(c: RepSep, tokens: seq[Token], pos: int, source: ptr string): Optio
     col = res.get.col
     arr.add res.get
     i = res.get.pos
-    sep = c.sep(tokens, i, source)
+    sep = c.sep(tokens, i, source, filepath)
     if sep.isSome:
       i = sep.get.pos
-      res = c.c(tokens, i, source)
+      res = c.c(tokens, i, source, filepath)
     else:
       break
   Result(
     kind: rkArr, arr: arr, pos: i,
-    source: source, line: line, col: col
+    source: source, filepath: filepath, line: line, col: col
   ).some
 
-method call*(c: Process, tokens: seq[Token], pos: int, source: ptr string): Option[Result] =
-  var res = c.c(tokens, pos, source)
+method call*(c: Process, tokens: seq[Token], pos: int, source, filepath: ptr string): Option[Result] =
+  var res = c.c(tokens, pos, source, filepath)
   if res.isSome:
     let position = res.get.pos
     res = c.f(res.get)
@@ -181,13 +181,13 @@ method call*(c: Process, tokens: seq[Token], pos: int, source: ptr string): Opti
     return res
   return none[Result]()
 
-method call*(c: Exp, tokens: seq[Token], pos: int, source: ptr string): Option[Result] =
-  var res = c.c(tokens, pos, source)
+method call*(c: Exp, tokens: seq[Token], pos: int, source, filepath: ptr string): Option[Result] =
+  var res = c.c(tokens, pos, source, filepath)
 
   proc process_next_exp(r: Result): Option[Result] =
     r.valx.valfn(Result(
       kind: rkPair, valx: res.get, valy: r.valy,
-      source: source, line: r.line, col: r.col
+      source: source, filepath: filepath, line: r.line, col: r.col
     ))
   
   var
@@ -198,30 +198,30 @@ method call*(c: Exp, tokens: seq[Token], pos: int, source: ptr string): Option[R
         c.c ^ process_next_exp
     next_res = res
   while next_res.isSome:
-    next_res = next_c(tokens, res.get.pos, source)
+    next_res = next_c(tokens, res.get.pos, source, filepath)
     if next_res.isSome:
       res = next_res
   return res
 
-method call*(c: Lazy, tokens: seq[Token], pos: int, source: ptr string): Option[Result] =
+method call*(c: Lazy, tokens: seq[Token], pos: int, source, filepath: ptr string): Option[Result] =
   if c.c.isNone:
     c.c = c.c_func().some
-  return c.c.get()(tokens, pos, source)
+  return c.c.get()(tokens, pos, source, filepath)
 
-method call*(c: Phrase, tokens: seq[Token], pos: int, source: ptr string): Option[Result] =
-  let res = c.c(tokens, pos, source)
+method call*(c: Phrase, tokens: seq[Token], pos: int, source, filepath: ptr string): Option[Result] =
+  let res = c.c(tokens, pos, source, filepath)
   if res.isSome and res.get.pos == tokens.len:
     return res
   elif res.isSome:
     if res.get.kind == rkAst:
       syntaxError(
         "Error at " & $res.get.pos & " token (" & $res.get.ast.kind & ")",
-        tokens[res.get.pos].line, tokens[res.get.pos].col, source
+        tokens[res.get.pos].line, tokens[res.get.pos].col, source, filepath
       )
     else:
       syntaxError(
         "Error at " & $res.get.pos & " token.",
-        tokens[res.get.pos].line, tokens[res.get.pos].col, source,
+        tokens[res.get.pos].line, tokens[res.get.pos].col, source, filepath
       )
   else:
-    elysError("Unknown error.", 0, 0, source)
+    elysError("Unknown error.", 0, 0, source, filepath)

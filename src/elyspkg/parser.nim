@@ -15,21 +15,21 @@ func operator*(value: string): Reserved = reserved(value, TokenKind.tkOp)
 func processBool*(res: Result): Option[Result] =
   case res.val.get:
     of "on", "true":
-      return Result(kind: rkBool, valb: true, line: res.line, col: res.col, source: res.source).some
+      return Result(kind: rkBool, valb: true, line: res.line, col: res.col, source: res.source, filepath: res.filepath).some
     of "off", "false":
-      return Result(kind: rkBool, valb: false, line: res.line, col: res.col, source: res.source).some
+      return Result(kind: rkBool, valb: false, line: res.line, col: res.col, source: res.source, filepath: res.filepath).some
     else:
       raise newException(ValueError, "unknown boolean value " & res.getVal)
 
 
 func processInt*(res: Result): Option[Result] =
-  Result(kind: rkInt, vali: res.val.get.parseInt, line: res.line, col: res.col, source: res.source).some
+  Result(kind: rkInt, vali: res.val.get.parseInt, line: res.line, col: res.col, source: res.source, filepath: res.filepath).some
 func processFloat*(res: Result): Option[Result] =
-  Result(kind: rkFloat, valf: res.val.get.parseFloat, line: res.line, col: res.col, source: res.source).some
+  Result(kind: rkFloat, valf: res.val.get.parseFloat, line: res.line, col: res.col, source: res.source, filepath: res.filepath).some
 func processNull*(res: Result): Option[Result] =
-  astRes(nullAst(), res.line, res.col, res.source)
+  astRes(nullAst(), res.line, res.col, res.source, res.filepath)
 func processString*(res: Result): Option[Result] =
-  astRes(stringAst(res.val.get()[1..^2]), res.line, res.col, res.source)
+  astRes(stringAst(res.val.get()[1..^2]), res.line, res.col, res.source, res.filepath)
 
 
 func idTag(): Combinator =
@@ -53,13 +53,13 @@ func assignOperators(): seq[string] =
 
 
 func processIntNumber(res: Result): Option[Result] =
-  astRes(intAst(res.vali), res.line, res.col, res.source)
+  astRes(intAst(res.vali), res.line, res.col, res.source, res.filepath)
 func processFloatNumber(res: Result): Option[Result] =
-  astRes(floatAst(res.valf), res.line, res.col, res.source)
+  astRes(floatAst(res.valf), res.line, res.col, res.source, res.filepath)
 func processBoolean(res: Result): Option[Result] =
-  astRes(boolAst(res.valb), res.line, res.col, res.source)
+  astRes(boolAst(res.valb), res.line, res.col, res.source, res.filepath)
 func processVar(res: Result): Option[Result] =
-  astRes(varAst(res.val.get), res.line, res.col, res.source)
+  astRes(varAst(res.val.get), res.line, res.col, res.source, res.filepath)
 func processGroup(res: Result): Option[Result] =
   res.valx.valy.some
 
@@ -90,7 +90,7 @@ func exprGroup(): Combinator =
 
 
 func processBExprNot(res: Result): Option[Result] =
-  astRes(notAst(res.valy.ast), res.line, res.col, res.source)
+  astRes(notAst(res.valy.ast), res.line, res.col, res.source, res.filepath)
 func bExprNot(): Combinator =
   ((operator"!" | operator"not") + lazy(expr)) ^ processBExprNot
 
@@ -99,7 +99,7 @@ func processExprArray(res: Result): Option[Result] =
   var arr: seq[ASTRoot] = @[]
   for i in res.arr:
     arr.add i.valx.ast
-  astRes(arrAst(arr), res.line, res.col, res.source)
+  astRes(arrAst(arr), res.line, res.col, res.source, res.filepath)
 func exprArray(): Combinator =
   (
     (
@@ -114,7 +114,7 @@ func processExprObject(res: Result): Option[Result] =
   var r: seq[tuple[key, val: ASTRoot]] = @[]
   for i in res.arr:
     r.add (key: i.valx.valx.ast, val: i.valy.ast)
-  astRes(objAst(r), res.line, res.col, res.source)
+  astRes(objAst(r), res.line, res.col, res.source, res.filepath)
 func exprObject(): Combinator =
   (
     (
@@ -129,7 +129,7 @@ func processBracketExpr(res: Result): Option[Result] =
   var arr: seq[ASTRoot] = @[]
   for i in res.valy.arr:
     arr.add i.ast
-  astRes(bracket(res.valx.valx.ast, res.valx.valy.ast, arr), res.line, res.col, res.source)
+  astRes(bracket(res.valx.valx.ast, res.valx.valy.ast, arr), res.line, res.col, res.source, res.filepath)
 func bracketExpr(): Combinator =
   (
     lazy(exprTermPre) + ((operator"[" + lazy(expr) + operator"]") ^ processGroup) +
@@ -141,17 +141,17 @@ func processSliceExpr(res: Result): Option[Result] =
   if res.valx.kind == rkStr:
     astRes(
       slice(intAst(0), res.valy.ast, res.valx.val.get),
-      res.line, res.col, res.source
+      res.line, res.col, res.source, res.filepath
     )
   elif res.valy.kind == rkStr:
     astRes(
       slice(res.valx.ast, intAst(-1), res.valy.val.get),
-      res.line, res.col, res.source
+      res.line, res.col, res.source, res.filepath
     )
   else:
     astRes(
       slice(res.valx.valx.ast, res.valy.ast, res.valx.valy.val.get),
-      res.line, res.col, res.source
+      res.line, res.col, res.source, res.filepath
     )
 func sliceExpr(): Combinator =
   (
@@ -174,7 +174,7 @@ func processSimpleFuncExpr(res: Result): Option[Result] =
       args.val.add i.valx.ast
     else:
       kwargs.val.add (key: i.valx.ast, val: i.valy.valy.ast)
-  astRes(callAst(res.valx.val.get, args, kwargs), res.line, res.col, res.source)
+  astRes(callAst(res.valx.val.get, args, kwargs), res.line, res.col, res.source, res.filepath)
 func simpleFuncExpr(): Combinator =
   (
     idTag() + (
@@ -189,7 +189,7 @@ func simpleFuncExpr(): Combinator =
 func processCastFuncExpr(res: Result): Option[Result] =
   astRes(
     callAst(res.valy.val.get, arrAst(@[res.valx.ast]), objAst(@[])),
-    res.line, res.col, res.source
+    res.line, res.col, res.source, res.filepath
   )
 func castFuncExpr(): Combinator =
   (
@@ -204,7 +204,7 @@ func processStringFuncExpr(res: Result): Option[Result] =
     echo res
   astRes(
     callAst(res.valx.val.get, arrAst(@[res.valy.ast]), objAst(@[])),
-    res.line, res.col, res.source
+    res.line, res.col, res.source, res.filepath
   )
 func stringFuncExpr(): Combinator =
   (
@@ -221,7 +221,7 @@ func processMethodCallExpr(res: Result): Option[Result] =
       args.val.add i.valx.ast
     else:
       kwargs.val.add (key: i.valx.ast, val: i.valy.valy.ast)
-  astRes(callAst(res.valx.valy.val.get, args, kwargs), res.line, res.col, res.source)
+  astRes(callAst(res.valx.valy.val.get, args, kwargs), res.line, res.col, res.source, res.filepath)
   # astRes(callAst(res.valy.val.get, arrAst(@[res.valx.ast]), objAst(@[])))
 func methodCallExpr(): Combinator =
   (
@@ -264,9 +264,10 @@ func processBinOp(res: Result): Option[Result] =
     kind: rkFun,
     line: res.line,
     source: res.source,
+    filepath: res.filepath,
     col: res.col,
     valfn: proc(r: Result): Option[Result] =
-      astRes(binOpAst(r.valx.ast, r.valy.ast, res.val.get), r.line, r.col, r.source)
+      astRes(binOpAst(r.valx.ast, r.valy.ast, res.val.get), r.line, r.col, r.source, r.filepath)
   ).some
 
 
@@ -292,7 +293,7 @@ func expr(): Combinator =
 func processAssignStmt(res: Result): Option[Result] =
   astRes(
     assignStmtAst(res.valx.valx.valy.val.get, res.valy.ast, false, true),
-    res.line, res.col, res.source
+    res.line, res.col, res.source, res.filepath
   )
 func assignStmt(): Combinator =
   # var x = 12300
@@ -301,7 +302,7 @@ func assignStmt(): Combinator =
 func processAssignConstStmt(res: Result): Option[Result] =
   astRes(
     assignStmtAst(res.valx.valx.valy.val.get, res.valy.ast, true, true),
-    res.line, res.col, res.source
+    res.line, res.col, res.source, res.filepath
   )
 func assignConstStmt(): Combinator =
   # const x = 100
@@ -310,7 +311,7 @@ func assignConstStmt(): Combinator =
 func processReAssignStmt(res: Result): Option[Result] =
   astRes(
     assignStmtAst(res.valx.valx.val.get, res.valy.ast, false, false, res.valx.valy.val.get),
-    res.line, res.col, res.source
+    res.line, res.col, res.source, res.filepath
   )
 func reAssignStmt(): Combinator =
   # x = y
@@ -319,7 +320,7 @@ func reAssignStmt(): Combinator =
 func processAssignBracketStmt(res: Result): Option[Result] =
   astRes(
     assignBracket(res.valx.valx.ast.BracketExprAST, res.valy.ast, res.valx.valy.val.get),
-    res.valy.line, res.valy.col, res.valy.source
+    res.valy.line, res.valy.col, res.valy.source, res.valy.filepath
   )
 func assignBracketStmt(): Combinator =
   # x[z] = y
@@ -330,7 +331,7 @@ func processPrint(res: Result): Option[Result] =
   var arr: seq[Result] = @[]
   for i in res.valy.arr:
     arr.add i
-  astRes(printAst(arr), res.line, res.col, res.source)
+  astRes(printAst(arr), res.line, res.col, res.source, res.filepath)
 func printStmt(): Combinator =
   # print(x)
   # print x
@@ -360,7 +361,7 @@ func processIfStmt(res: Result): Option[Result] =
       none[ElseBranchStmt]()
     else:
       elseBranchStmt(elseBranch.valy.ast).some
-  ), res.line, res.col, res.source)
+  ), res.line, res.col, res.source, res.filepath)
 func ifStatement(): Combinator =
   # if cond {
   #   body
@@ -395,7 +396,7 @@ func processFuncStatement(res: Result): Option[Result] =
       kwargs.val.add (key: i.valx.ast, val: i.valy.valy.ast)
   astRes(funcStmt(
     res.valx.valx.valy.val.get, args, kwargs, res.valy.ast
-  ), res.line, res.col, res.source)
+  ), res.line, res.col, res.source, res.filepath)
 func funcStatement(): Combinator =
   let
     args = repSep(
@@ -413,11 +414,11 @@ func funcStatement(): Combinator =
 
 func processEof(res: Result): Option[Result] =
   # \0
-  astRes(EofStmt(kind: akEof), res.line, res.col, res.source)
+  astRes(EofStmt(kind: akEof), res.line, res.col, res.source, res.filepath)
 
 
 func processUnaryOperatorStmt(res: Result): Option[Result] =
-  astRes(unaryOpAst(res.valy.ast, res.valx.val.get), res.line, res.col, res.source)
+  astRes(unaryOpAst(res.valy.ast, res.valx.val.get), res.line, res.col, res.source, res.filepath)
 func unaryOperatorStmt(): Combinator =
   # -x
   (anyOpInList(unaryOperators()) + (exprValue() | exprGroup())) ^ processUnaryOperatorStmt
@@ -425,9 +426,9 @@ func unaryOperatorStmt(): Combinator =
 
 func processIncDec(res: Result): Option[Result] =
   if res.valx.kind == rkStr:
-    astRes(incDecStmt(res.valy.ast, res.valx.val.get), res.line, res.col, res.source)
+    astRes(incDecStmt(res.valy.ast, res.valx.val.get), res.line, res.col, res.source, res.filepath)
   else:
-    astRes(incDecStmt(res.valx.ast, res.valy.val.get), res.line, res.col, res.source)
+    astRes(incDecStmt(res.valx.ast, res.valy.val.get), res.line, res.col, res.source, res.filepath)
 func incDecStatement(): Combinator =
   # x++
   # --x
@@ -442,7 +443,7 @@ func stmtListEmbed(): Combinator =
 
 
 func processWhileStatement(res: Result): Option[Result] =
-  astRes(whileStmt(res.valx.valy.ast, res.valy.ast), res.line, res.col, res.source)
+  astRes(whileStmt(res.valx.valy.ast, res.valy.ast), res.line, res.col, res.source, res.filepath)
 func whileStatement(): Combinator =
   (
     keyword"while" + alt(
@@ -453,13 +454,13 @@ func whileStatement(): Combinator =
 
 
 func processBreakStatement(res: Result): Option[Result] =
-  astRes(BreakStmt(kind: akBreak), res.line, res.col, res.source)
+  astRes(BreakStmt(kind: akBreak), res.line, res.col, res.source, res.filepath)
 func breakStatement(): Combinator =
   keyword"break" ^ processBreakStatement
 
 
 func processContinueStatement(res: Result): Option[Result] =
-  astRes(ContinueStmt(kind: akContinue), res.line, res.col, res.source)
+  astRes(ContinueStmt(kind: akContinue), res.line, res.col, res.source, res.filepath)
 func continueStatement(): Combinator =
   keyword"continue" ^ processContinueStatement
 
@@ -470,7 +471,7 @@ func processSwapStatement(res: Result): Option[Result] =
     res.valx.valx.valx.valx.valy.ast,
     res.valx.valx.valy.ast,
     res.valy.ast
-  ), res.line, res.col, res.source)
+  ), res.line, res.col, res.source, res.filepath)
 func swapStatement(): Combinator =
   let expression = bracketExpr() | (idTag() ^ processVar)
   (
@@ -482,7 +483,7 @@ func processForInStatement(res: Result): Option[Result] =
   var arr: seq[ASTRoot] = @[]
   for i in res.valx.valy.valx.valx.arr:
     arr.add i.ast
-  astRes(forInStmt(arr, res.valx.valy.valy.ast, res.valy.ast), res.line, res.col, res.source)
+  astRes(forInStmt(arr, res.valx.valy.valy.ast, res.valy.ast), res.line, res.col, res.source, res.filepath)
 func forInStatement(): Combinator =
   let conditionStatement = alt(
     (operator"(" + repSep(idTag() ^ processVar, operator",") + operator")") ^ processGroup,
@@ -521,7 +522,7 @@ func processStmtList(res: Result): Option[Result] =
   var asts: seq[ASTRoot] = @[]
   for i in res.arr:
     asts.add(i.valx.ast)
-  astRes(statementList(asts), res.line, res.col, res.source)
+  astRes(statementList(asts), res.line, res.col, res.source, res.filepath)
 
 
 func stmtList(): Combinator =
@@ -530,5 +531,5 @@ func stmtList(): Combinator =
   ) ^ processStmtList
 
 
-func elysParser*(tokens: seq[Token], sourceCode: ptr string): auto =
-  phrase(stmtList()).call(tokens, 0, sourceCode)
+func elysParser*(tokens: seq[Token], sourceCode, filepathPointer: ptr string): auto =
+  phrase(stmtList()).call(tokens, 0, sourceCode, filepathPointer)
