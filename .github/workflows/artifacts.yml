@@ -63,9 +63,3 @@ jobs:
           name: linux-x64
           path: |
             bin/linux/x64/elys
-      
-      - uses: actions/upload-artifact@v4
-        with:
-          name: linux-x86
-          path: |
-            bin/linux/x86/elys
