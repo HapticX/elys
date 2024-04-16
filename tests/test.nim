@@ -206,3 +206,15 @@ suite "Elys":
     print x
     print x[12039]['0'][0]["x"]
     """)
+  
+  test "generators":
+    exec"""
+    # this is simple generator
+    print {
+      for i in 0..10 {
+        if i % 2 {
+          i
+        }
+      }
+    }
+    """

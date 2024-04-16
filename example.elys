@@ -15,3 +15,20 @@ while x < 10 {
   x++
 }
 print x
+
+
+# some little magic ... 💀
+var y = [
+  {
+    var y = [0 0 0 0 0 0 0 0 0 0]
+    for i in 0..<9 {
+      y[if i % 2 == 0 {
+        i
+      } else {
+        i+1
+      }] = i+1
+    }
+    y
+  }
+]
+print y

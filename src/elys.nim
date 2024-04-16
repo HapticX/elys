@@ -49,6 +49,9 @@ when isMainModule:
     f.close()
     discard compile(source, filename)
     QuitSuccess
+  
+  proc runInteractive(): int =
+    QuitSuccess
 
   proc main(version = false): int =
     ## Elys language CLI
@@ -81,6 +84,8 @@ when isMainModule:
     quit(main(true))
   elif "-h" in params or "--help" in params:
     quit(helpMessage())
+  elif "-i" in params or "--interactive" in params:
+    quit(runInteractive())
   elif params.len > 0 and not params[^1].startsWith("-"):
     quit(run(params[^1], params[0..^2]))
   elif params.len == 0:

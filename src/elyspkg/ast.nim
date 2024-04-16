@@ -849,6 +849,7 @@ method eval*(self: ForInStmt, env: Environment): ASTRoot =
     obj = self.obj.eval(env)
   var
     environment = newEnv(env)
+    res = arrAst(@[])
   # check for variables
   for i in self.vars:
     if i.kind != akVar:
@@ -864,15 +865,21 @@ method eval*(self: ForInStmt, env: Environment): ASTRoot =
         of akArr:
           for i in obj.ArrayAST.val:
             environment.setDef(variable, i.eval(environment).ASTExpr)
-            discard self.body.eval(environment)
+            let x = self.body.eval(environment)
+            if x:
+              res.val.add x 
         of akSliceExpr:
           for i in obj.SliceExprAST.l.IntAST.val..obj.SliceExprAST.r.IntAST.val:
             environment.setDef(variable, intAst(i))
-            discard self.body.eval(environment)
+            let x = self.body.eval(environment)
+            if x:
+              res.val.add x
         of akString:
           for i in obj.StringAST.val:
             environment.setDef(variable, stringAst($i))
-            discard self.body.eval(environment)
+            let x = self.body.eval(environment)
+            if x:
+              res.val.add x
         else:
           valueError(
             "Can not unpack " & $self.vars.len & " variables from " &
@@ -888,12 +895,16 @@ method eval*(self: ForInStmt, env: Environment): ASTRoot =
           for (index, value) in obj.ArrayAST.val.pairs:
             environment.setDef(variable2, value.eval(environment).ASTExpr)
             environment.setDef(variable1, intAst(index))
-            discard self.body.eval(environment)
+            let x = self.body.eval(environment)
+            if x:
+              res.val.add x
         of akString:
           for (index, value) in obj.StringAST.val.pairs:
             environment.setDef(variable2, stringAst($value))
             environment.setDef(variable1, intAst(index))
-            discard self.body.eval(environment)
+            let x = self.body.eval(environment)
+            if x:
+              res.val.add x
         else:
           valueError(
             "Can not unpack " & $self.vars.len & " variables from " &
@@ -906,3 +917,4 @@ method eval*(self: ForInStmt, env: Environment): ASTRoot =
         obj.astValue(env),
         self.line, self.col, self.code, self.filepath
       )
+  return res
