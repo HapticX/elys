@@ -46,11 +46,6 @@ jobs:
           cd src/
           nim c -d:danger -d:strip --passC:-flto --passL:-flto --out:../bin/linux/x64/elys elys
       
-      - name: Mac OS build
-        run: |
-          cd src/
-          nim c -d:danger -d:strip --passC:-flto --passL:-flto --os:macos --out:../bin/macos/x64/elys.app elys
-      
       - uses: actions/upload-artifact@v4
         with:
           name: windows-x64
@@ -68,9 +63,3 @@ jobs:
           name: linux-x64
           path: |
             bin/linux/x64/elys
-      
-      - uses: actions/upload-artifact@v4
-        with:
-          name: macos-x64
-          path: |
-            bin/macos/x64/elys
