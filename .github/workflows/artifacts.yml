@@ -5,6 +5,7 @@ name: Build CLI 🧪
 
 jobs:
   build:
+    name: "Build CLI for Windows and Linux"
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -33,7 +34,6 @@ jobs:
       - name: Install Dependencies 🔨
         run: |
           sudo apt install mingw-w64
-          mkdir bin/
       
       - name: Windows build
         run: |
@@ -63,3 +63,41 @@ jobs:
           name: linux-x64
           path: |
             bin/linux/x64/elys
+  buildMacOS:
+    needs: build
+    name: "Build CLI for Mac OS"
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os:
+          - macos-latest
+        nim_version:
+          - '2.0.2'
+    env:
+      TIMEOUT_EXIT_STATUS: 124
+    steps:
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Cache nimble
+        id: cache-nimble
+        uses: actions/cache@v4
+        with:
+          path: ~/.nimble
+          key: ${{ runner.os }}-nimble-${{ hashFiles('*.nimble') }}
+      
+      - uses: jiro4989/setup-nim-action@v1
+        with:
+          nim-version: ${{ matrix.nim_version }}
+
+      - name: Mac build
+        run: |
+          cd src/
+          nim c -d:danger -d:strip --passC:-flto --passL:-flto --out:../bin/mac/x64/elys.app elys
+      
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-x64
+          path: |
+            bin/mac/x64/elys.app
