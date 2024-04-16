@@ -64,7 +64,6 @@ jobs:
           path: |
             bin/linux/x64/elys
   buildMacOS:
-    needs: build
     name: "Build CLI for Mac OS"
     runs-on: ${{ matrix.os }}
     strategy:
