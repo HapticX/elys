@@ -3,6 +3,10 @@
 # elys
 ### scripting language
 
+[![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/HapticX/elys/artifacts.yml?style=for-the-badge&label=Build%20CLI)](https://github.com/HapticX/elys/actions/workflows/artifacts.yml)
+[![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/HapticX/elys/test.yml?style=for-the-badge&label=Tests)](https://github.com/HapticX/elys/actions/workflows/test.yml)
+
+
 </div>
 
 
