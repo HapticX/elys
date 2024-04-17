@@ -20,6 +20,20 @@ With its simple syntax, **Elys** is an excellent choice for rapid prototyping an
 It provides easy interaction with the host application and straightforward handling of tasks such as data management, interface control, and process automation.
 
 
+## API
+
+If you want to use **elys** in your project, then you just need to install it using `nimble` and use it as follows:
+```sh
+nimble install https://github.com/HapticX/elys
+```
+
+```nim
+import elys
+
+discard elys.exec("print(1)")
+```
+
+
 ## Hello, world! 👋
 
 Here's hello world program written in **Elys**:
