@@ -217,4 +217,8 @@ suite "Elys":
         }
       }
     }
+    # here python-like generators
+    print [i for i in 0..10]
+    print [i for i in 0..10 if i % 2]
+    print [i*2 for i in 0..10 if i % 2]
     """

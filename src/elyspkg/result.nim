@@ -11,6 +11,7 @@ type
     akEof,
     akStmt, akStmtList, akAssign, akPrint, akIncDec, akElifBranch, akElseBranch,
     akIfStmt, akBreak, akContinue, akWhile, akAssignBracket, akSwap, akForInStmt,
+    akForInGen,
     akFunc
   ASTRoot* = ref object of RootObj
     kind*: ASTKind
@@ -133,6 +134,11 @@ type
     vars*: seq[ASTRoot]
     obj*: ASTRoot
     body*: ASTRoot
+  ForInGenerator* = ref object of Stmt
+    vars*: seq[ASTRoot]
+    obj*: ASTRoot
+    body*: ASTRoot
+    condition*: Option[ASTRoot]
   PrintStmt* = ref object of Stmt
     data*: seq[Result]
 
@@ -204,7 +210,10 @@ func `$`*(ast: ASTRoot): string =
       $ast.SwapStmt.toL & ", " & $ast.SwapStmt.toR & ")"
     of akForInStmt:
       "ForInStmt( (" & ast.ForInStmt.vars.join(", ") & ") in " & $ast.ForInStmt.obj &
-      $ast.ForInStmt.body & ")"
+      ", " & $ast.ForInStmt.body & ")"
+    of akForInGen:
+      "ForInGenerator( (" & ast.ForInGenerator.vars.join(", ") & ") in " & $ast.ForInGenerator.obj &
+      ", " & $ast.ForInGenerator.condition & ")"
     else:
       "ASTRoot(kind: " & $ast.kind & ")"
 

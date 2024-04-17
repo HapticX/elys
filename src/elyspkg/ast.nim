@@ -127,6 +127,9 @@ template whileStmt*(c: ASTRoot, b: ASTRoot): WhileStmt =
 template forInStmt*(v: seq[ASTRoot], o, b: ASTRoot): ForInStmt =
   ForInStmt(vars: v, obj: o, body: b, kind: akForInStmt)
 
+template forInGen*(v: seq[ASTRoot], o, b: ASTRoot, c: Option[ASTRoot]): ForInGenerator =
+  ForInGenerator(vars: v, obj: o, body: b, condition: c, kind: akForInStmt)
+
 template funcStmt*(n: string, a: ArrayAST, kwa: ObjectAST, b: ASTRoot): FuncStmt =
   FuncStmt(name: n, args: a, kwargs: kwa, body: b, kind: akFunc)
 
@@ -309,12 +312,32 @@ func `/`*(l, r: ASTRoot, env: Environment): ASTRoot =
     a = l.eval(env)
     b = r.eval(env)
   if a.kind == akInt and b.kind == akInt:
+    if b.IntAST.val == 0:
+      zeroDivisionError(
+        "Can not divide by 0",
+        l.line, l.col, l.code, l.filepath
+      )
     return floatAST(a.IntAST.val / b.IntAST.val)
   elif a.kind == akInt and b.kind == akFloat:
+    if b.FloatAST.val == 0.0:
+      zeroDivisionError(
+        "Can not divide by 0",
+        l.line, l.col, l.code, l.filepath
+      )
     return floatAst(a.IntAST.val.float / b.FloatAST.val)
   elif a.kind == akFloat and b.kind == akInt:
+    if b.IntAST.val == 0:
+      zeroDivisionError(
+        "Can not divide by 0",
+        l.line, l.col, l.code, l.filepath
+      )
     return floatAst(a.FloatAST.val / b.IntAST.val.float)
   elif a.kind == akFloat and b.kind == akFloat:
+    if b.FloatAST.val == 0.0:
+      zeroDivisionError(
+        "Can not divide by 0",
+        l.line, l.col, l.code, l.filepath
+      )
     return floatAst(a.FloatAST.val / b.FloatAST.val)
   else:
     valueError(
@@ -328,8 +351,18 @@ func `//`*(l, r: ASTRoot, env: Environment): ASTRoot =
     a = l.eval(env)
     b = r.eval(env)
   if a.kind == akInt and b.kind == akInt:
+    if b.IntAST.val == 0:
+      zeroDivisionError(
+        "Can not divide by 0",
+        l.line, l.col, l.code, l.filepath
+      )
     return intAST(a.IntAST.val div b.IntAST.val)
   elif a.kind == akInt and b.kind == akFloat:
+    if b.IntAST.val == 0:
+      zeroDivisionError(
+        "Can not divide by 0",
+        l.line, l.col, l.code, l.filepath
+      )
     return intAst(a.FloatAST.val.int div b.IntAST.val)
   else:
     valueError(
@@ -904,6 +937,91 @@ method eval*(self: ForInStmt, env: Environment): ASTRoot =
             environment.setDef(variable1, intAst(index))
             let x = self.body.eval(environment)
             if x:
+              res.val.add x
+        else:
+          valueError(
+            "Can not unpack " & $self.vars.len & " variables from " &
+            obj.astValue(env),
+            self.line, self.col, self.code, self.filepath
+          )
+    else:
+      valueError(
+        "Can not unpack " & $self.vars.len & " variables from " &
+        obj.astValue(env),
+        self.line, self.col, self.code, self.filepath
+      )
+  return res
+
+method eval*(self: ForInGenerator, env: Environment): ASTRoot =
+  let
+    obj = self.obj.eval(env)
+  var
+    environment = newEnv(env)
+    res = arrAst(@[])
+  # check for variables
+  for i in self.vars:
+    if i.kind != akVar:
+      valueError(
+        "Can not iterate over " & obj.astValue(environment) &
+        " via " & i.astValue(environment),
+        self.line, self.col, self.code, self.filepath
+      )
+  case self.vars.len:
+    of 1:
+      let variable = self.vars[0].VarAST.name
+      case obj.kind:
+        of akArr:
+          for i in obj.ArrayAST.val:
+            environment.setDef(variable, i.eval(environment).ASTExpr)
+            let x = self.body.eval(environment)
+            if self.condition.isNone:
+              res.val.add x 
+            elif self.condition.get.eval(environment):
+              res.val.add x
+        of akSliceExpr:
+          for i in obj.SliceExprAST.l.IntAST.val..obj.SliceExprAST.r.IntAST.val:
+            environment.setDef(variable, intAst(i))
+            let x = self.body.eval(environment)
+            if self.condition.isNone:
+              res.val.add x 
+            elif self.condition.get.eval(environment):
+              res.val.add x
+        of akString:
+          for i in obj.StringAST.val:
+            environment.setDef(variable, stringAst($i))
+            let x = self.body.eval(environment)
+            if self.condition.isNone:
+              res.val.add x 
+            elif self.condition.get.eval(environment):
+              res.val.add x
+        else:
+          valueError(
+            "Can not unpack " & $self.vars.len & " variables from " &
+            obj.astValue(env),
+            self.line, self.col, self.code, self.filepath
+          )
+    of 2:
+      let
+        variable1 = self.vars[0].VarAST.name
+        variable2 = self.vars[1].VarAST.name
+      case obj.kind:
+        of akArr:
+          for (index, value) in obj.ArrayAST.val.pairs:
+            environment.setDef(variable2, value.eval(environment).ASTExpr)
+            environment.setDef(variable1, intAst(index))
+            let x = self.body.eval(environment)
+            if self.condition.isNone:
+              res.val.add x 
+            elif self.condition.get.eval(environment):
+              res.val.add x
+        of akString:
+          for (index, value) in obj.StringAST.val.pairs:
+            environment.setDef(variable2, stringAst($value))
+            environment.setDef(variable1, intAst(index))
+            let x = self.body.eval(environment)
+            if self.condition.isNone:
+              res.val.add x 
+            elif self.condition.get.eval(environment):
               res.val.add x
         else:
           valueError(

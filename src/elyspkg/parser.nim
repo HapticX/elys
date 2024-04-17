@@ -200,8 +200,6 @@ func castFuncExpr(): Combinator =
 
 
 func processStringFuncExpr(res: Result): Option[Result] =
-  {.noSideEffect.}:
-    echo res
   astRes(
     callAst(res.valx.val.get, arrAst(@[res.valy.ast]), objAst(@[])),
     res.line, res.col, res.source, res.filepath
@@ -234,12 +232,35 @@ func methodCallExpr(): Combinator =
   ) ^ processMethodCallExpr
 
 
+func processForInGenerator(res: Result): Option[Result] =
+  var arr: seq[ASTRoot] = @[]
+  for i in res.valx.valx.valx.valy.arr:
+    arr.add i.ast
+  var condition = none[ASTRoot]()
+  if res.valy.kind == rkPair:
+    condition = res.valy.valy.ast.some
+  astRes(forInGen(
+    arr, res.valx.valy.ast, res.valx.valx.valx.valx.valx.ast, condition
+  ), res.line, res.col, res.source, res.filepath)
+func forInGenerator(): Combinator =
+  (
+    (operator"[" + (
+      lazy(expr) + keyword"for" + repSep(idTag() ^ processVar, operator",") +
+      operator"in" + lazy(expr) + opt(keyword"if" + alt(
+        (operator"(" + lazy(expr) + operator")"),
+        lazy(expr)
+      ))
+    ) + operator"]") ^ processGroup
+  ) ^ processForInGenerator
+
+
 func exprTermPre(): Combinator =
   (
     exprGroup() |
     lazy(ifStatement) |
     lazy(stmtListEmbed) |
     lazy(exprArray) |
+    lazy(forInGenerator) |
     incDecStatement() |
     unaryOperatorStmt() |
     bExprNot() |
