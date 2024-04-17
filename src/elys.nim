@@ -51,6 +51,22 @@ when isMainModule:
     QuitSuccess
   
   proc runInteractive(): int =
+    styledEcho "Elys ", $VERSION
+    var env = newEnv()
+    env.returnNew = true
+    while true:
+      stdout.write(">>> ")
+      var code = stdin.readLine()
+      if code == "exit":
+        break
+      let tokens = code.parseForTokens
+      var
+        sourcePointer: ptr string = addr code
+        filepath: string = "$interactive"
+        filepathPointer: ptr string = addr filepath
+      let parsed = tokens.elysParser(sourcePointer, filepathPointer)
+      if parsed.isSome:
+        discard parsed.get.ast.eval(env)
     QuitSuccess
 
   proc main(version = false): int =

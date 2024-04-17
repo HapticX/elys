@@ -22,6 +22,7 @@ type
     lvl*: int
     modules*: seq[string]
     signal*: SignalKind
+    returnNew*: bool
   RuntimeError* = object of ValueError
 
 
@@ -683,6 +684,8 @@ method eval*(self: StmtList, env: Environment): ASTRoot =
     env.signal = environment.signal
     if env.signal in {sContinue, sBreak}:
       break
+  if env.returnNew:
+    env.vars = environment.vars
   return result
 
 method eval(self: BinOpAST, env: Environment): ASTRoot =
