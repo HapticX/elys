@@ -86,8 +86,9 @@ when isMainModule:
     styledEcho fgMagenta, "Elys CLI"
     echo ""
     echo "Usage:"
-    echo "  -h | --help    - shows this message"
-    echo "  -v | --version - shows version"
+    echo "  -h | --help        - shows this message"
+    echo "  -v | --version     - shows version"
+    echo "  -i | --interactive - runs interactive mode"
     QuitSuccess
   
   let
