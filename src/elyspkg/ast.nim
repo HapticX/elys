@@ -294,6 +294,30 @@ func toBoolean*(a: ASTRoot, env: Environment = nil): ASTRoot =
         )
 
 
+func toNimBool*(a: ASTRoot, env: Environment = nil): bool =
+  case a.kind:
+    of akBool:
+      return a.BoolAST.val
+    of akInt:
+      return a.IntAST.val != 0
+    of akFloat:
+      return a.FloatAST.val != 0.0
+    of akString:
+      return a.StringAST.val.len > 0
+    of akArr:
+      return a.ArrayAST.val.len > 0
+    of akObj:
+      return a.ObjectAST.val.len > 0
+    of akNull:
+      return false
+    else:
+      if not env.isNil:
+        valueError(
+          "Can not get boolean from " & $a.astValue(env),
+          a.line, a.col, a.code, a.filepath
+        )
+
+
 converter toBool*(ast: ASTRoot): bool =
   ast.toBoolean().BoolAST.val
 
@@ -600,12 +624,12 @@ func evalSliceExprAST*(self: SliceExprAST, env: Environment): ASTRoot =
     else:
       binOpAst(self.r, intAst(1), "-", self.l.line, self.l.col, self.l.code, self.l.filepath).eval(env)
   self.op = BinOperator.DotDot
-  if self.l.kind notin {akInt}:
+  if self.l.kind != akInt:
     valueError(
       "Can not to use " & self.l.astValue(env) & " in slice",
       self.l.line, self.l.col, self.l.code, self.l.filepath
     )
-  if self.r.kind notin {akInt}:
+  if self.r.kind != akInt:
     valueError(
       "Can not to use " & self.r.astValue(env) & " in slice",
       self.r.line, self.r.col, self.r.code, self.r.filepath
@@ -865,13 +889,13 @@ func evalAssgnBracketStmt*(self: AssignBracketStmt, env: Environment): ASTRoot =
 
 func evalIfStmt*(self: IfStmt, env: Environment): ASTRoot =
   var cond = self.condition.eval(env)
-  if cond:
+  if cond.toNimBool:
     self.body.StmtList.parent = akIfStmt
     return self.body.eval(env)
   if self.elifArray.len > 0:
     for i in self.elifArray:
       cond = i.condition.eval(env)
-      if cond:
+      if cond.toNimBool:
         i.body.StmtList.parent = akIfStmt
         return i.body.eval(env)
   if self.elseBranch.isSome:
@@ -883,7 +907,7 @@ func evalIfStmt*(self: IfStmt, env: Environment): ASTRoot =
 func evalWhileStmt*(self: WhileStmt, env: Environment): ASTRoot =
   result = nullAst()
   self.body.StmtList.parent = akWhile
-  while self.condition.eval(env):
+  while self.condition.eval(env).toNimBool:
     result = self.body.eval(env)
     case env.signal:
       of sContinue:
