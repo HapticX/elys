@@ -1,6 +1,6 @@
 import
-  options,
-  strutils
+  std/options,
+  std/strutils
 
 
 type

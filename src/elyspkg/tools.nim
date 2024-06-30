@@ -3,7 +3,7 @@ import
   ./parser,
   ./result,
   ./ast,
-  options
+  std/options
 
 
 proc compile*(code: string, file: string = "$file"): ASTRoot =

@@ -2,7 +2,7 @@ import
   ./lexer,
   ./result,
   ./utils,
-  options
+  std/options
 
 
 type

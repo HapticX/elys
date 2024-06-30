@@ -1,8 +1,8 @@
 import
-  strutils
+  std/strutils
 
 when not defined(js):
-  import terminal
+  import std/terminal
 
 
 func getLineFromCode(source: ptr string, line: int): string =

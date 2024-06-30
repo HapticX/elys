@@ -1,5 +1,5 @@
 import
-  strutils
+  std/strutils
 
 
 proc isInteger(source: string, start: int): int =

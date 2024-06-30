@@ -3,9 +3,9 @@ import
   ./combinator,
   ./ast,
   ./result,
-  strutils,
-  sequtils,
-  options
+  std/strutils,
+  std/sequtils,
+  std/options
 
 
 template keyword*(value: string): Reserved = reserved(value, TokenKind.tkKeyword)
