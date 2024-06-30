@@ -38,6 +38,7 @@ jobs:
         run: |
           nimble refresh
           nimble install -y -d
+          nimble install -y benchy
       
       - name: Build C tests 🔨
         run: |
