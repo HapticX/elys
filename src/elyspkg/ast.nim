@@ -1,11 +1,11 @@
 import
   ./result,
   ./utils,
-  macros,
-  strutils,
-  hashes,
-  tables,
-  options
+  std/macros,
+  std/strutils,
+  std/hashes,
+  std/tables,
+  std/options
 
 
 type  
@@ -14,7 +14,7 @@ type
     sBreak,
     sContinue
   EnvVar* = ref object
-    val*: ASTExpr
+    val*: ASTRoot
     isConst*: bool
     topLvl*: bool
   Environment* = ref object
@@ -26,9 +26,9 @@ type
   RuntimeError* = object of ValueError
 
 
-proc newEnv*(vars: TableRef[string, EnvVar], lvl: int, modules: seq[string]): Environment =
+template newEnv*(vars: TableRef[string, EnvVar], lvl: int, modules: seq[string]): Environment =
   Environment(vars: vars, lvl: lvl, modules: modules)
-proc newEnv*(env: Environment): Environment =
+template newEnv*(env: Environment): Environment =
   var vars = newTable[string, EnvVar]()
   for k, v in env.vars.pairs:
     vars[k] = EnvVar(
@@ -37,21 +37,73 @@ proc newEnv*(env: Environment): Environment =
       topLvl: true
     )
   Environment(vars: vars, lvl: env.lvl, modules: env.modules)
-proc newEnv*(): Environment =
+template newEnv*(): Environment =
   Environment(vars: newTable[string, EnvVar](), lvl: 0, modules: @[])
 
 
 macro evalFor(t, body: untyped) =
   newProc(
-    postfix(ident"eval", "*"),
+    postfix(ident("eval" & $t), "*"),
     [
       ident"ASTRoot",
       newIdentDefs(ident"self", t),
       newIdentDefs(ident"env", ident"Environment")
     ],
     body,
-    nnkMethodDef
+    nnkFuncDef
   )
+
+func binOpAstOperator*(operator: string, line, col: int, source, filepath: ptr string): BinOperator =
+  case operator
+  of "+":
+    return BinOperator.Add
+  of "-":
+    return BinOperator.Minus
+  of "*":
+    return BinOperator.Multiply
+  of "/":
+    return BinOperator.Divide
+  of "%":
+    return BinOperator.Mod
+  of "//":
+    return BinOperator.Div
+  of "and", "&&":
+    return BinOperator.And
+  of "or", "||":
+    return BinOperator.Or
+  of "==":
+    return BinOperator.Equals
+  of "!=":
+    return BinOperator.NotEquals
+  of ">":
+    return BinOperator.More
+  of "<":
+    return BinOperator.Less
+  of ">=":
+    return BinOperator.MoreThan
+  of "<=":
+    return BinOperator.LessThan
+  of "..":
+    return BinOperator.DotDot
+  of "..<":
+    return BinOperator.DotDotLess
+  of ":":
+    return BinOperator.TwoDots
+  of "--":
+    return BinOperator.MinusMinus
+  of "++":
+    return BinOperator.PlusPlus
+  of "?":
+    return BinOperator.QuestionMark
+  of "=":
+    return BinOperator.Assignment
+  of "":
+    return BinOperator.None
+  else:
+    syntaxError(
+      "Unknown operator: '" & operator & "'",
+      line, col, source, filepath
+    )
 
 
 template nullAst*(): NullAST = NullAST(kind: akNull)
@@ -65,25 +117,28 @@ template boolAst*(v: bool): BoolAST = BoolAST(val: v, kind: akBool)
 template arrAst*(v: seq[ASTRoot]): ArrayAST =
   ArrayAST(val: v, kind: akArr)
 
+template arrAst*(): ArrayAST =
+  ArrayAST(val: newSeq[ASTRoot](), kind: akArr)
+
 template objAst*(v: seq[tuple[key, val: ASTRoot]]): ObjectAST =
   ObjectAST(val: v, kind: akObj)
 
 template bracket*(e, i: ASTRoot, idxs: seq[ASTRoot]): BracketExprAST =
   BracketExprAST(index: i, expr: e, indexes: idxs, kind: akBracketExpr)
 
-template slice*(left, right: ASTRoot, operator: string): SliceExprAST =
-  SliceExprAST(l: left, r: right, op: operator, kind: akSliceExpr)
+template slice*(left, right: ASTRoot, operator: string, line, col: int, source, filepath: ptr string): SliceExprAST =
+  SliceExprAST(l: left, r: right, op: binOpAstOperator(operator, line, col, source, filepath), kind: akSliceExpr)
 
-template unaryOpAst*(e: ASTRoot, o: string): UnaryOpAST =
-  UnaryOpAST(kind: akUnaryOp, expr: e, op: o)
+template unaryOpAst*(e: ASTRoot, o: string, line, col: int, source, filepath: ptr string): UnaryOpAST =
+  UnaryOpAST(kind: akUnaryOp, expr: e, op: binOpAstOperator(o, line, col, source, filepath))
 
-template incDecStmt*(e: ASTRoot, o: string): IncDecStmt =
-  IncDecStmt(kind: akIncDec, expr: e, op: o)
+template incDecStmt*(e: ASTRoot, o: string, line, col: int, source, filepath: ptr string): IncDecStmt =
+  IncDecStmt(kind: akIncDec, expr: e, op: binOpAstOperator(o, line, col, source, filepath))
 
 template varAst*(v: string): VarAST = VarAST(name: v, kind: akVar)
 
-template binOpAst*(left, right: ASTRoot, o: string): BinOpAST =
-  BinOpAST(l: left, r: right, op: o, kind: akBinOp)
+template binOpAst*(left, right: ASTRoot, o: string, line, col: int, source, filepath: ptr string): BinOpAST =
+  BinOpAST(l: left, r: right, op: binOpAstOperator(o, line, col, source, filepath), kind: akBinOp)
 
 template notAst*(e: ASTRoot): NotOp =
   NotOp(expr: e, kind: akNot)
@@ -93,15 +148,15 @@ template statementList*(stmts: seq[ASTRoot]): StmtList =
 
 template assignStmtAst*(n: string, e: ASTRoot,
                         isc: bool = false, isa: bool = false,
-                        aop: string = "="): AssignStmt =
+                        aop: string = "=", line, col: int, source, filepath: ptr string): AssignStmt =
   AssignStmt(
     name: n, expr: e, isConst: isc,
-    isAssign: isa, assignOp: aop,
+    isAssign: isa, assignOp: binOpAstOperator(aop, line, col, source, filepath),
     kind: akAssign
   )
 
-template assignBracket*(e: BracketExprAST, v: ASTRoot, o: string): AssignBracketStmt =
-  AssignBracketStmt(expr: e, val: v, kind: akAssignBracket, op: o[1..^1])
+template assignBracket*(e: BracketExprAST, v: ASTRoot, o: string, line, col: int, source, filepath: ptr string): AssignBracketStmt =
+  AssignBracketStmt(expr: e, val: v, kind: akAssignBracket, op: binOpAstOperator(o[1..^1], line, col, source, filepath))
 
 template elifBranchStmt*(c: ASTRoot, b: ASTRoot): ElifBranchStmt =
   ElifBranchStmt(condition: c, body: b, kind: akElifBranch)
@@ -129,7 +184,7 @@ template forInStmt*(v: seq[ASTRoot], o, b: ASTRoot): ForInStmt =
   ForInStmt(vars: v, obj: o, body: b, kind: akForInStmt)
 
 template forInGen*(v: seq[ASTRoot], o, b: ASTRoot, c: Option[ASTRoot]): ForInGenerator =
-  ForInGenerator(vars: v, obj: o, body: b, condition: c, kind: akForInStmt)
+  ForInGenerator(vars: v, obj: o, body: b, condition: c, kind: akForInGen)
 
 template funcStmt*(n: string, a: ArrayAST, kwa: ObjectAST, b: ASTRoot): FuncStmt =
   FuncStmt(name: n, args: a, kwargs: kwa, body: b, kind: akFunc)
@@ -141,21 +196,21 @@ template swap*(left, right, toLeft, toRight: ASTRoot): SwapStmt =
   SwapStmt(l: left, r: right, toL: toLeft, toR: toRight, kind: akSwap)
 
 
-method eval*(self: ASTRoot, env: Environment): ASTRoot {.base.} = nullAst()
+func eval*(self: ASTRoot, env: Environment): ASTRoot
 
 
-func `[]=`*(env: Environment, key: string, value: ASTExpr) =
+template `[]=`*(env: Environment, key: string, value: ASTRoot) =
   env.vars[key].val = value
 
 
-func setDef*(env: Environment, key: string, value: ASTExpr) =
+template setDef*(env: Environment, key: string, value: ASTRoot) =
   if env.vars.hasKey(key):
     env.vars[key].val = value
   else:
     env.vars[key] = EnvVar(val: value)
 
 
-func `[]`*(env: Environment, key: string): ASTExpr =
+template `[]`*(env: Environment, key: string): ASTRoot =
   env.vars[key].val
 
 
@@ -181,17 +236,18 @@ func astValue*(a: ASTRoot, env: Environment): string =
     of akBool: $a.BoolAST.val
     of akString: $a.StringAST.val
     of akSliceExpr:
-      "Slice(" & a.SliceExprAST.l.astValue(env) & a.SliceExprAST.op &
+      "Slice(" & a.SliceExprAST.l.astValue(env) & $a.SliceExprAST.op &
       a.SliceExprAST.r.astValue(env) & ")"
     of akArr:
       var
         res = ""
         i = 0
-      while i < a.ArrayAST.val.len:
-        if i == a.ArrayAST.val.len-1:
-          res &= a.ArrayAST.val[i].eval(env).astValue(env)
+      let arr = a.ArrayAST.val
+      while i < arr.len:
+        if i == arr.len-1:
+          res &= arr[i].astValue(env)
         else:
-          res &= a.ArrayAST.val[i].eval(env).astValue(env) & ", "
+          res &= arr[i].astValue(env) & ", "
         inc i
       "[" & res & "]"
     of akObj:
@@ -201,8 +257,8 @@ func astValue*(a: ASTRoot, env: Environment): string =
       let obj = a.ObjectAST.val
       while i < obj.len:
         let
-          key = obj[i].key.eval(env)
-          val = obj[i].val.eval(env)
+          key = obj[i].key
+          val = obj[i].val
         res = res & (if key.kind == akString: '"' & key.astValue(env) & '"' else: key.astValue(env))
         res &= ": "
         res = res & (if val.kind == akString: '"' & val.astValue(env) & '"' else: val.astValue(env))
@@ -299,7 +355,7 @@ func `*`*(l, r: ASTRoot, env: Environment): ASTRoot =
   elif a.kind == akArr and b.kind == akInt:
     var res = a.ArrayAST.val
     for i in 0..<b.IntAST.val:
-      res.add a.ArrayAST.val
+      res.add a.ArrayAST.val[i]
     return arrAst(res)
   else:
     valueError(
@@ -402,7 +458,7 @@ func `==`*(l, r: ASTRoot, env: Environment): ASTRoot =
     else: boolAst(a[] == b[])
 
 
-func `!=`*(a, b: ASTRoot, env: Environment): ASTRoot =
+template `!=`*(a, b: ASTRoot, env: Environment): ASTRoot =
   boolAst(not `==`(a, b, env).BoolAST.val)
 
 
@@ -424,24 +480,28 @@ func `>`*(l, r: ASTRoot, env: Environment): ASTRoot =
   )
 
 
-func `>=`*(a, b: ASTRoot, env: Environment): ASTRoot =
+template `>=`*(a, b: ASTRoot, env: Environment): ASTRoot =
   boolAst(`==`(a, b, env).BoolAST.val or `>`(a, b, env).BoolAST.val)
 
 
-func `<`*(a, b: ASTRoot, env: Environment): ASTRoot =
+template `<`*(a, b: ASTRoot, env: Environment): ASTRoot =
   boolAst(not `>=`(a, b, env).BoolAST.val)
 
 
-func `<=`*(a, b: ASTRoot, env: Environment): ASTRoot =
+template `<=`*(a, b: ASTRoot, env: Environment): ASTRoot =
   boolAst(`==`(a, b, env).BoolAST.val or `<`(a, b, env).BoolAST.val)
 
 
-func `and`*(a, b: ASTRoot): ASTRoot =
+template `and`*(a, b: ASTRoot): ASTRoot =
   boolAst(a.BoolAST.val and b.BoolAST.val)
 
 
-func `or`*(a, b: ASTRoot): ASTRoot =
+template `or`*(a, b: ASTRoot): ASTRoot =
   boolAst(a.BoolAST.val or b.BoolAST.val)
+
+
+template `not`*(a: ASTRoot): ASTRoot =
+  boolAst(not a.BoolAST.val)
 
 
 func `[]`*(l, r: ASTRoot, env: Environment): ASTRoot =
@@ -473,7 +533,11 @@ func `[]`*(l, r: ASTRoot, env: Environment): ASTRoot =
     if left < 0 and right < 0:
       return arrAst(a.ArrayAST.val[^(-left)..^(-right)])
     elif left < 0:
-      return arrAst(a.ArrayAST.val[^(-left)..right])
+      valueError(
+        "Can not get element from " & a.astValue(env) & " at index " & b.astValue(env),
+          r.line, r.col, r.code, r.filepath
+      )
+      # return arrAst(a.ArrayAST.val[^(-left)..right])
     elif right < 0:
       return arrAst(a.ArrayAST.val[left..^(-right)])
     else:
@@ -524,14 +588,18 @@ evalFor FloatAST: self
 evalFor StringAST: self
 evalFor BoolAST: self
 
-method eval*(self: SliceExprAST, env: Environment): ASTRoot =
+
+func evalNotOp*(self: NotOp, env: Environment): ASTRoot =
+  not self.expr.eval(env)
+
+func evalSliceExprAST*(self: SliceExprAST, env: Environment): ASTRoot =
   self.l = self.l.eval(env)
   self.r =
-    if self.op == "..":
+    if self.op == BinOperator.DotDot:
       self.r.eval(env)
     else:
-      binOpAst(self.r, intAst(1), "-").eval(env)
-  self.op = ".."
+      binOpAst(self.r, intAst(1), "-", self.l.line, self.l.col, self.l.code, self.l.filepath).eval(env)
+  self.op = BinOperator.DotDot
   if self.l.kind notin {akInt}:
     valueError(
       "Can not to use " & self.l.astValue(env) & " in slice",
@@ -544,12 +612,12 @@ method eval*(self: SliceExprAST, env: Environment): ASTRoot =
     )
   return self
 
-method eval*(self: ArrayAST, env: Environment): ASTRoot =
+func evalArrayAST*(self: ArrayAST, env: Environment): ASTRoot =
   for i in 0..<self.val.len:
     self.val[i] = self.val[i].eval(env)
   return self
 
-method eval*(self: ObjectAST, env: Environment): ASTRoot =
+func evalObjectAST*(self: ObjectAST, env: Environment): ASTRoot =
   var i = 0
   while i < self.val.len:
     self.val[i].key = self.val[i].key.eval(env)
@@ -557,11 +625,11 @@ method eval*(self: ObjectAST, env: Environment): ASTRoot =
     inc i
   return self
 
-method eval*(self: FuncStmt, env: Environment): ASTRoot =
+func evalFuncStmt*(self: FuncStmt, env: Environment): ASTRoot =
   env.vars[self.name] = EnvVar(val: self)
   nullAst()
 
-method eval*(self: CallExprAST, env: Environment): ASTRoot =
+func evalCallExprAST*(self: CallExprAST, env: Environment): ASTRoot =
   if not env.vars.hasKey(self.name):
     valueError(
       "function " & self.name & " is not exists",
@@ -589,9 +657,9 @@ method eval*(self: CallExprAST, env: Environment): ASTRoot =
     selfArgsLen = self.args.val.len
   for i in self.args.val:
     if index < argsLen:
-      environment.vars[args[index].VarAST.name] = EnvVar(val: i.eval(env).ASTExpr)
+      environment.vars[args[index].VarAST.name] = EnvVar(val: i.eval(env))
     else:
-      environment.vars[kwargs[-(-(index-selfArgsLen)-kwargsLen)].key.VarAST.name] = EnvVar(val: i.eval(env).ASTExpr)
+      environment.vars[kwargs[-(-(index-selfArgsLen)-kwargsLen)].key.VarAST.name] = EnvVar(val: i.eval(env))
     inc index
   for i in self.kwargs.val:
     var keyIsValid = false
@@ -604,17 +672,17 @@ method eval*(self: CallExprAST, env: Environment): ASTRoot =
         "the function does not have a " & i.key.VarAST.name & " argument",
         self.line, self.col, self.code, self.filepath
       )
-    environment.vars[i.key.VarAST.name] = EnvVar(val: i.val.eval(env).ASTExpr)
+    environment.vars[i.key.VarAST.name] = EnvVar(val: i.val.eval(env))
   # set kwargs from function
   for i in kwargs:
     let key = i.key.VarAST.name
     if not environment.vars.hasKey(key):
-      environment.vars[key] = EnvVar(val: i.val.eval(env).ASTExpr)
+      environment.vars[key] = EnvVar(val: i.val.eval(env))
     elif environment.vars[key].topLvl:
-      environment.vars[key] = EnvVar(val: i.val.eval(env).ASTExpr)
+      environment.vars[key] = EnvVar(val: i.val.eval(env))
   return function.body.eval(environment)
 
-method eval*(self: BracketExprAST, env: Environment): ASTRoot =
+func evalBracketExprAST*(self: BracketExprAST, env: Environment): ASTRoot =
   result = self.expr[self.index, env]
   for i in self.indexes:
     result = result[i.eval(env), env]
@@ -622,7 +690,7 @@ method eval*(self: BracketExprAST, env: Environment): ASTRoot =
   result.col = self.col
 
 
-method eval*(self: VarAST, env: Environment): ASTRoot =
+func evalVarAST*(self: VarAST, env: Environment): ASTRoot =
   if not env.vars.hasKey(self.name):
     usedBeforeAssign(
       "Variable " & self.name & " was not assigned before",
@@ -630,7 +698,7 @@ method eval*(self: VarAST, env: Environment): ASTRoot =
     )
   env.vars[self.name].val
 
-method eval*(self: UnaryOpAST, env: Environment): ASTRoot =
+func evalUnaryOpAST*(self: UnaryOpAST, env: Environment): ASTRoot =
   let val = self.expr.eval(env)
   if val.kind == akInt:
     val.IntAST.val = -val.IntAST.val
@@ -639,16 +707,16 @@ method eval*(self: UnaryOpAST, env: Environment): ASTRoot =
     val.FloatAST.val = -val.FloatAST.val
     return val
   valueError(
-    "Can not to apply unary operator '" & self.op & "' to " & $self.expr,
+    "Can not to apply unary operator '" & $self.op & "' to " & $self.expr,
     self.line, self.col, self.code, self.filepath
   )
 
-method eval*(self: IncDecStmt, env: Environment): ASTRoot =
+func evalIncDecStmt*(self: IncDecStmt, env: Environment): ASTRoot =
   let val = self.expr.eval(env)
   case self.op:
-    of "++":
+    of BinOperator.PlusPlus:
       if val.kind == akInt:
-        val.IntAST.val = val.IntAST.val + 1
+        inc val.IntAST.val
         return val
       elif val.kind == akFloat:
         val.FloatAST.val = val.FloatAST.val + 1f
@@ -657,9 +725,9 @@ method eval*(self: IncDecStmt, env: Environment): ASTRoot =
         "Can not increase " & $self.expr,
         self.line, self.col, self.code, self.filepath
       )
-    of "--":
+    of BinOperator.MinusMinus:
       if val.kind == akInt:
-        val.IntAST.val = val.IntAST.val - 1
+        dec val.IntAST.val
         return val
       elif val.kind == akFloat:
         val.FloatAST.val = val.FloatAST.val - 1f
@@ -673,11 +741,11 @@ method eval*(self: IncDecStmt, env: Environment): ASTRoot =
       )
     else:
       valueError(
-        "Unknown inc/dec operator '" & self.op & "' for " & $self.expr,
+        "Unknown inc/dec operator '" & self.op.op() & "' for " & $self.expr,
         self.line, self.col, self.code, self.filepath
       )
 
-method eval*(self: StmtList, env: Environment): ASTRoot =
+func evalStmtList*(self: StmtList, env: Environment): ASTRoot =
   var environment = newEnv(env)
   for s in self.statements:
     result = s.eval(environment)
@@ -688,47 +756,44 @@ method eval*(self: StmtList, env: Environment): ASTRoot =
     env.vars = environment.vars
   return result
 
-method eval(self: BinOpAST, env: Environment): ASTRoot =
-  let
-    left = self.l
-    right = self.r
+func evalBinOpAST*(self: BinOpAST, env: Environment): ASTRoot =
   case self.op:
-    of "+":
-      return `+`(left, right, env)
-    of "-":
-      return `-`(left, right, env)
-    of "*":
-      return `*`(left, right, env)
-    of "/":
-      return `/`(left, right, env)
-    of "%":
-      return `%`(left, right, env)
-    of "//":
-      return `//`(left, right, env)
-    of "and", "&&":
-      return left.eval(env) and right.eval(env)
-    of "or", "||":
-      return left.eval(env) or right.eval(env)
-    of "==":
-      return `==`(left, right, env)
-    of "!=":
-      return `!=`(left, right, env)
-    of ">":
-      return `>`(left, right, env)
-    of "<":
-      return `<`(left, right, env)
-    of ">=":
-      return `>=`(left, right, env)
-    of "<=":
-      return `<=`(left, right, env)
+    of BinOperator.Add:
+      return `+`(self.l, self.r, env)
+    of BinOperator.Minus:
+      return `-`(self.l, self.r, env)
+    of BinOperator.Multiply:
+      return `*`(self.l, self.r, env)
+    of BinOperator.Divide:
+      return `/`(self.l, self.r, env)
+    of BinOperator.Mod:
+      return `%`(self.l, self.r, env)
+    of BinOperator.Div:
+      return `//`(self.l, self.r, env)
+    of BinOperator.And:
+      return self.l.eval(env) and self.r.eval(env)
+    of BinOperator.Or:
+      return self.l.eval(env) or self.r.eval(env)
+    of BinOperator.Equals:
+      return `==`(self.l, self.r, env)
+    of BinOperator.NotEquals:
+      return `!=`(self.l, self.r, env)
+    of BinOperator.More:
+      return `>`(self.l, self.r, env)
+    of BinOperator.Less:
+      return `<`(self.l, self.r, env)
+    of BinOperator.MoreThan:
+      return `>=`(self.l, self.r, env)
+    of BinOperator.LessThan:
+      return `<=`(self.l, self.r, env)
     else:
       syntaxError(
-        "Unknown operator: '" & self.op & "'",
-        left.line, left.col, left.code, left.filepath
+        "Unknown operator: '" & self.op.op() & "'",
+        self.l.line, self.l.col, self.l.code, self.l.filepath
       )
 
-method eval*(self: AssignStmt, env: Environment): ASTRoot =
-  if self.isAssign and self.assignOp == "=":
+func evalAssignStmt*(self: AssignStmt, env: Environment): ASTRoot =
+  if self.isAssign and self.assignOp == BinOperator.Assignment:
     # var x = y
     # const x = y
     if env.vars.hasKey(self.name) and not env.vars[self.name].topLvl:
@@ -737,7 +802,7 @@ method eval*(self: AssignStmt, env: Environment): ASTRoot =
         self.line, self.col, self.code, self.filepath
       )
     env.vars[self.name] = EnvVar(
-      val: self.expr.eval(env).ASTExpr,
+      val: self.expr.eval(env),
       isConst: self.isConst,
       topLvl: false
     )
@@ -755,8 +820,8 @@ method eval*(self: AssignStmt, env: Environment): ASTRoot =
         self.line, self.col, self.code, self.filepath
       )
     env.vars[self.name].val = binOpAst(
-      env.vars[self.name].val, self.expr, self.assignOp[0..^2]
-    ).eval(env).ASTExpr
+      env.vars[self.name].val, self.expr, self.assignOp.op(), self.line, self.col, self.code, self.filepath
+    ).eval(env)
   elif not self.isAssign:
     # x = y
     if not env.vars.hasKey(self.name):
@@ -769,17 +834,17 @@ method eval*(self: AssignStmt, env: Environment): ASTRoot =
         "Const " & self.name & " can not be modified",
         self.line, self.col, self.code, self.filepath
       )
-    env.vars[self.name].val = self.expr.eval(env).ASTExpr
+    env.vars[self.name].val = self.expr.eval(env)
   nullAst()
 
 
-method eval*(self: AssignBracketStmt, env: Environment): ASTRoot =
+func evalAssgnBracketStmt*(self: AssignBracketStmt, env: Environment): ASTRoot =
   let
     val =
-      if self.op == "":
+      if self.op == BinOperator.None:
         self.val.eval(env)
       else:
-        binOpAst(self.expr.eval(env), self.val.eval(env), self.op).eval(env)
+        binOpAst(self.expr.eval(env), self.val.eval(env), self.op.op(), self.line, self.col, self.code, self.filepath).eval(env)
   var values: seq[tuple[i: ASTRoot, v: ASTRoot]] = @[
     (intAst(-1).ASTRoot, self.expr.expr.eval(env)),
   ]
@@ -798,15 +863,15 @@ method eval*(self: AssignBracketStmt, env: Environment): ASTRoot =
   nullAst()
 
 
-method eval*(self: IfStmt, env: Environment): ASTRoot =
+func evalIfStmt*(self: IfStmt, env: Environment): ASTRoot =
   var cond = self.condition.eval(env)
-  if cond.toBoolean(env).BoolAST.val:
+  if cond:
     self.body.StmtList.parent = akIfStmt
     return self.body.eval(env)
   if self.elifArray.len > 0:
     for i in self.elifArray:
       cond = i.condition.eval(env)
-      if cond.toBoolean(env).BoolAST.val:
+      if cond:
         i.body.StmtList.parent = akIfStmt
         return i.body.eval(env)
   if self.elseBranch.isSome:
@@ -815,24 +880,23 @@ method eval*(self: IfStmt, env: Environment): ASTRoot =
   return nullAst()
 
 
-method eval*(self: WhileStmt, env: Environment): ASTRoot =
-  var res: ASTRoot
+func evalWhileStmt*(self: WhileStmt, env: Environment): ASTRoot =
+  result = nullAst()
   self.body.StmtList.parent = akWhile
-  while self.condition.eval(env).BoolAST.val:
-    res = self.body.eval(env)
+  while self.condition.eval(env):
+    result = self.body.eval(env)
     case env.signal:
       of sContinue:
         env.signal = sNothing
         continue
       of sBreak:
         env.signal = sNothing
-        break
+        return result
       else:
         discard
-  return nullAst()
 
 
-method eval*(self: PrintStmt, env: Environment): ASTRoot =
+func evalPrintStmt*(self: PrintStmt, env: Environment): ASTRoot =
   var
     res = ""
     i = 0
@@ -842,19 +906,20 @@ method eval*(self: PrintStmt, env: Environment): ASTRoot =
     else:
       res &= $self.data[i].ast.eval(env).astValue(env) & ", "
     inc i
-  echo res
+  {.noSideEffect.}:
+    echo res
   nullAst()
 
 
-method eval*(self: BreakStmt, env: Environment): ASTRoot =
+func evalBreakStmt*(self: BreakStmt, env: Environment): ASTRoot =
   env.signal = sBreak
   return self
 
-method eval*(self: ContinueStmt, env: Environment): ASTRoot =
+func evalContinueStmt*(self: ContinueStmt, env: Environment): ASTRoot =
   env.signal = sContinue
   return self
 
-method eval*(self: SwapStmt, env: Environment): ASTRoot =
+func evalSwapStmt*(self: SwapStmt, env: Environment): ASTRoot =
   if self.l.kind != self.r.kind or self.toL.kind != self.toR.kind:
     valueError(
       "Can not swap different types",
@@ -865,14 +930,14 @@ method eval*(self: SwapStmt, env: Environment): ASTRoot =
       let
         l = self.toL.eval(env)
         r = self.toR.eval(env)
-      discard assignStmtAst(self.l.VarAST.name, l, false, false).eval(env)
-      discard assignStmtAst(self.r.VarAST.name, r, false, false).eval(env)
+      discard assignStmtAst(self.l.VarAST.name, l, false, false, "=", l.line, l.col, l.code, l.filepath).eval(env)
+      discard assignStmtAst(self.r.VarAST.name, r, false, false, "=", l.line, l.col, l.code, l.filepath).eval(env)
     of akBracketExpr:
       let
         l = self.toL.eval(env)
         r = self.toR.eval(env)
-      discard assignBracket(self.l.BracketExprAST, l, "=").eval(env)
-      discard assignBracket(self.r.BracketExprAST, r, "=").eval(env)
+      discard assignBracket(self.l.BracketExprAST, l, "=", l.line, l.col, l.code, l.filepath).eval(env)
+      discard assignBracket(self.r.BracketExprAST, r, "=", l.line, l.col, l.code, l.filepath).eval(env)
     else:
       valueError(
         "Can not swap this",
@@ -880,12 +945,143 @@ method eval*(self: SwapStmt, env: Environment): ASTRoot =
       )
   nullAst()
 
-method eval*(self: ForInStmt, env: Environment): ASTRoot =
+func evalForInStmt*(self: ForInStmt, env: Environment): ASTRoot =
+  let obj = self.obj.eval(env)
+  var
+    environment = newEnv(env)
+    res = arrAst()
+  # check for variables
+  for i in self.vars:
+    if i.kind != akVar:
+      valueError(
+        "Can not iterate over " & obj.astValue(environment) &
+        " via " & i.astValue(environment),
+        self.line, self.col, self.code, self.filepath
+      )
+  var bodyRes: ASTRoot
+  case self.vars.len:
+    of 1:
+      let variable = self.vars[0].VarAST.name
+      case obj.kind:
+        of akArr:
+          for i in obj.ArrayAST.val:
+            environment.setDef(variable, i.eval(environment))
+            bodyRes = self.body.eval(environment)
+            case env.signal:
+              of sContinue:
+                env.signal = sNothing
+                continue
+              of sBreak:
+                env.signal = sNothing
+                break
+              else:
+                discard
+            if bodyRes:
+              res.val.add bodyRes
+        of akSliceExpr:
+          var integer = intAst(0)
+          for i in obj.SliceExprAST.l.IntAST.val..obj.SliceExprAST.r.IntAST.val:
+            integer.val = i
+            environment.setDef(variable, integer)
+            bodyRes = self.body.eval(environment)
+            case env.signal:
+              of sContinue:
+                env.signal = sNothing
+                continue
+              of sBreak:
+                env.signal = sNothing
+                break
+              else:
+                discard
+            if bodyRes:
+              res.val.add bodyRes
+        of akString:
+          var str = stringAst("")
+          for i in obj.StringAST.val:
+            str.val = $i
+            environment.setDef(variable, str)
+            bodyRes = self.body.eval(environment)
+            case env.signal:
+              of sContinue:
+                env.signal = sNothing
+                continue
+              of sBreak:
+                env.signal = sNothing
+                break
+              else:
+                discard
+            if bodyRes:
+              res.val.add bodyRes
+        else:
+          valueError(
+            "Can not unpack " & $self.vars.len & " variables from " &
+            obj.astValue(env),
+            self.line, self.col, self.code, self.filepath
+          )
+    of 2:
+      let
+        variable1 = self.vars[0].VarAST.name
+        variable2 = self.vars[1].VarAST.name
+      case obj.kind:
+        of akArr:
+          var integer = intAst(0)
+          for (index, value) in obj.ArrayAST.val.pairs:
+            integer.val = index
+            environment.setDef(variable2, value.eval(environment))
+            environment.setDef(variable1, integer)
+            bodyRes = self.body.eval(environment)
+            case env.signal:
+              of sContinue:
+                env.signal = sNothing
+                continue
+              of sBreak:
+                env.signal = sNothing
+                break
+              else:
+                discard
+            if bodyRes:
+              res.val.add bodyRes
+        of akString:
+          var
+            str = stringAst("")
+            integer = intAst(0)
+          for (index, value) in obj.StringAST.val.pairs:
+            str.val = $value
+            integer.val = index
+            environment.setDef(variable2, str)
+            environment.setDef(variable1, integer)
+            bodyRes = self.body.eval(environment)
+            case env.signal:
+              of sContinue:
+                env.signal = sNothing
+                continue
+              of sBreak:
+                env.signal = sNothing
+                break
+              else:
+                discard
+            if bodyRes:
+              res.val.add bodyRes
+        else:
+          valueError(
+            "Can not unpack " & $self.vars.len & " variables from " &
+            obj.astValue(env),
+            self.line, self.col, self.code, self.filepath
+          )
+    else:
+      valueError(
+        "Can not unpack " & $self.vars.len & " variables from " &
+        obj.astValue(env),
+        self.line, self.col, self.code, self.filepath
+      )
+  return res
+
+func evalForInGenerator*(self: ForInGenerator, env: Environment): ASTRoot =
   let
     obj = self.obj.eval(env)
   var
     environment = newEnv(env)
-    res = arrAst(@[])
+    res = arrAst()
   # check for variables
   for i in self.vars:
     if i.kind != akVar:
@@ -900,21 +1096,27 @@ method eval*(self: ForInStmt, env: Environment): ASTRoot =
       case obj.kind:
         of akArr:
           for i in obj.ArrayAST.val:
-            environment.setDef(variable, i.eval(environment).ASTExpr)
+            environment.setDef(variable, i.eval(environment))
             let x = self.body.eval(environment)
-            if x:
-              res.val.add x 
+            if self.condition.isNone:
+              res.val.add x
+            elif self.condition.get.eval(environment):
+              res.val.add x
         of akSliceExpr:
           for i in obj.SliceExprAST.l.IntAST.val..obj.SliceExprAST.r.IntAST.val:
             environment.setDef(variable, intAst(i))
             let x = self.body.eval(environment)
-            if x:
+            if self.condition.isNone:
+              res.val.add x 
+            elif self.condition.get.eval(environment):
               res.val.add x
         of akString:
           for i in obj.StringAST.val:
             environment.setDef(variable, stringAst($i))
             let x = self.body.eval(environment)
-            if x:
+            if self.condition.isNone:
+              res.val.add x 
+            elif self.condition.get.eval(environment):
               res.val.add x
         else:
           valueError(
@@ -929,17 +1131,21 @@ method eval*(self: ForInStmt, env: Environment): ASTRoot =
       case obj.kind:
         of akArr:
           for (index, value) in obj.ArrayAST.val.pairs:
-            environment.setDef(variable2, value.eval(environment).ASTExpr)
+            environment.setDef(variable2, value.eval(environment))
             environment.setDef(variable1, intAst(index))
             let x = self.body.eval(environment)
-            if x:
+            if self.condition.isNone:
+              res.val.add x 
+            elif self.condition.get.eval(environment):
               res.val.add x
         of akString:
           for (index, value) in obj.StringAST.val.pairs:
             environment.setDef(variable2, stringAst($value))
             environment.setDef(variable1, intAst(index))
             let x = self.body.eval(environment)
-            if x:
+            if self.condition.isNone:
+              res.val.add x 
+            elif self.condition.get.eval(environment):
               res.val.add x
         else:
           valueError(
@@ -955,87 +1161,62 @@ method eval*(self: ForInStmt, env: Environment): ASTRoot =
       )
   return res
 
-method eval*(self: ForInGenerator, env: Environment): ASTRoot =
-  let
-    obj = self.obj.eval(env)
-  var
-    environment = newEnv(env)
-    res = arrAst(@[])
-  # check for variables
-  for i in self.vars:
-    if i.kind != akVar:
-      valueError(
-        "Can not iterate over " & obj.astValue(environment) &
-        " via " & i.astValue(environment),
-        self.line, self.col, self.code, self.filepath
-      )
-  case self.vars.len:
-    of 1:
-      let variable = self.vars[0].VarAST.name
-      case obj.kind:
-        of akArr:
-          for i in obj.ArrayAST.val:
-            environment.setDef(variable, i.eval(environment).ASTExpr)
-            let x = self.body.eval(environment)
-            if self.condition.isNone:
-              res.val.add x 
-            elif self.condition.get.eval(environment):
-              res.val.add x
-        of akSliceExpr:
-          for i in obj.SliceExprAST.l.IntAST.val..obj.SliceExprAST.r.IntAST.val:
-            environment.setDef(variable, intAst(i))
-            let x = self.body.eval(environment)
-            if self.condition.isNone:
-              res.val.add x 
-            elif self.condition.get.eval(environment):
-              res.val.add x
-        of akString:
-          for i in obj.StringAST.val:
-            environment.setDef(variable, stringAst($i))
-            let x = self.body.eval(environment)
-            if self.condition.isNone:
-              res.val.add x 
-            elif self.condition.get.eval(environment):
-              res.val.add x
-        else:
-          valueError(
-            "Can not unpack " & $self.vars.len & " variables from " &
-            obj.astValue(env),
-            self.line, self.col, self.code, self.filepath
-          )
-    of 2:
-      let
-        variable1 = self.vars[0].VarAST.name
-        variable2 = self.vars[1].VarAST.name
-      case obj.kind:
-        of akArr:
-          for (index, value) in obj.ArrayAST.val.pairs:
-            environment.setDef(variable2, value.eval(environment).ASTExpr)
-            environment.setDef(variable1, intAst(index))
-            let x = self.body.eval(environment)
-            if self.condition.isNone:
-              res.val.add x 
-            elif self.condition.get.eval(environment):
-              res.val.add x
-        of akString:
-          for (index, value) in obj.StringAST.val.pairs:
-            environment.setDef(variable2, stringAst($value))
-            environment.setDef(variable1, intAst(index))
-            let x = self.body.eval(environment)
-            if self.condition.isNone:
-              res.val.add x 
-            elif self.condition.get.eval(environment):
-              res.val.add x
-        else:
-          valueError(
-            "Can not unpack " & $self.vars.len & " variables from " &
-            obj.astValue(env),
-            self.line, self.col, self.code, self.filepath
-          )
-    else:
-      valueError(
-        "Can not unpack " & $self.vars.len & " variables from " &
-        obj.astValue(env),
-        self.line, self.col, self.code, self.filepath
-      )
-  return res
+
+func eval*(self: ASTRoot, env: Environment): ASTRoot =
+  case self.kind:
+  of akString:
+    self
+  of akInt:
+    self
+  of akFloat:
+    self
+  of akBool:
+    self
+  of akNull:
+    self
+  of akNot:
+    evalNotOp(self.NotOp, env)
+  of akSliceExpr:
+    evalSliceExprAST(self.SliceExprAST, env)
+  of akArr:
+    evalArrayAST(self.ArrayAST, env)
+  of akObj:
+    evalObjectAST(self.ObjectAST, env)
+  of akFunc:
+    evalFuncStmt(self.FuncStmt, env)
+  of akCallExpr:
+    evalCallExprAST(self.CallExprAST, env)
+  of akBracketExpr:
+    evalBracketExprAST(self.BracketExprAST, env)
+  of akVar:
+    evalVarAST(self.VarAST, env)
+  of akUnaryOp:
+    evalUnaryOpAST(self.UnaryOpAST, env)
+  of akIncDec:
+    evalIncDecStmt(self.IncDecStmt, env)
+  of akStmtList:
+    evalStmtList(self.StmtList, env)
+  of akBinOp:
+    evalBinOpAST(self.BinOpAST, env)
+  of akAssign:
+    evalAssignStmt(self.AssignStmt, env)
+  of akAssignBracket:
+    evalAssgnBracketStmt(self.AssignBracketStmt, env)
+  of akIfStmt:
+    evalIfStmt(self.IfStmt, env)
+  of akWhile:
+    evalWhileStmt(self.WhileStmt, env)
+  of akPrint:
+    evalPrintStmt(self.PrintStmt, env)
+  of akBreak:
+    evalBreakStmt(self.BreakStmt, env)
+  of akContinue:
+    evalContinueStmt(self.ContinueStmt, env)
+  of akSwap:
+    evalSwapStmt(self.SwapStmt, env)
+  of akForInStmt:
+    evalForInStmt(self.ForInStmt, env)
+  of akForInGen:
+    evalForInGenerator(self.ForInGenerator, env)
+  else:
+    nullAst()

@@ -17,6 +17,7 @@ jobs:
           - '1.6.16'
           - '2.0.0'
           - '2.0.2'
+          - '2.0.4'
     env:
       TIMEOUT_EXIT_STATUS: 124
     steps:

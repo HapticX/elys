@@ -1,16 +1,80 @@
-when defined(js):
-  import regex
-  
-  template findRe(s: string, p: Regex2, m: var RegexMatch2): bool =
-    s.find(p, m)
-else:
-  import re
+import
+  strutils
 
-  template re2(x: varargs[untyped]): untyped =
-    re(`x`)
-  
-  template findRe(s: string, p: Regex, m: var seq[string]): bool =
-    s.find(p, m) != -1
+
+proc isInteger(source: string, start: int): int =
+  result = 0
+  var i = start
+  while i < source.len:
+    if source[i].isDigit:
+      inc result
+    else:
+      break
+    inc i
+  return result
+
+
+proc isFloat(source: string, start: int): int =
+  result = 0
+  var i = start
+  var hasDot = false
+  var hasDigit = false
+  while i < source.len:
+    if source[i].isDigit:
+      inc result
+      hasDigit = true
+    elif not hasDot and source[i] == '.':
+      inc result
+      hasDot = true
+    else:
+      break
+    inc i
+  if not hasDigit:
+    return 0
+  if source[i] == '.':
+    return 0
+  return result
+
+
+proc isIdentifier(source: string, start: int): int =
+  result = 0
+  var i = start
+  var hasDot = false
+  while i < source.len:
+    if source[i] in {'a'..'z', 'A'..'Z'} and start == i:
+      inc result
+    elif source[i] in {'0'..'9', 'a'..'z', 'A'..'Z', '_'}:
+      inc result
+    else:
+      break
+    inc i
+  return result
+
+
+proc testFor(source: string, start: int, val: string): int =
+  result = 0
+  var
+    i = start
+    j = 0
+  if source.len - start < val.len:
+    return 0
+  while i < source.len and j < val.len:
+    if source[i] == val[j]:
+      inc result
+    else:
+      break
+    inc i
+    inc j
+  if result == val.len:
+    return result
+  return 0
+
+
+proc testFor(source: string, start: int, values: openarray[string]): int =
+  for val in values:
+    if (let length = testFor(source, start, val); length) > 0:
+      return length
+  return 0
 
 
 type
@@ -31,6 +95,12 @@ type
     value*: string
     pos*: int
     line*, col*: int
+  LexState = enum
+    None,
+    String,
+    DoubleString,
+    Backtick,
+    Comment
 
 
 func `$`*(tk: Token): string =
@@ -40,41 +110,6 @@ func `$`*(tk: Token): string =
     "(" & tk.value & ", " & $tk.kind & ")"
 
 
-when defined(js):
-  func tkn(src: string, m: var RegexMatch2, i: var int, kind: TokenKind, line, col: int): Token =
-    let val = src[m.boundaries]
-    result = Token(value: val, line: line, col: col, kind: kind )
-    inc i, val.len
-else:
-  func tkn(src: string, m: var seq[string], i: var int, kind: TokenKind, line, col: int): Token =
-    let val = m[0]
-    result = Token(value: val, line: line, col: col, kind: kind)
-    inc i, val.len
-
-
-func parseString(source: string, symbol: char, line, col: var int): tuple[t: Token, i: int] =
-  var
-    i = 0
-    src = source[1..^1]
-    r = Token(value: $symbol, kind: tkString, line: line, col: col)
-  for s in src:
-    if s == '\n':
-      line += 1
-      col = 1
-    else:
-      col += 1
-    if s == symbol and i > 0 and src[i-1] == '\\':
-      r.value = r.value[0..^2] & s
-    elif s == symbol:
-      r.value &= s
-      inc i
-      break
-    else:
-      r.value &= s
-    inc i
-  (t: r, i: i+1)
-
-
 func parseForTokens*(source: string): seq[Token] =
   result = @[]
 
@@ -82,70 +117,107 @@ func parseForTokens*(source: string): seq[Token] =
     i: int = 0
     line: int = 1
     col: int = 1
+    current = Token()
     src = source
-  when defined(js):
-    var m: RegexMatch2
-  else:
-    var m = newSeq[string](2)
+    state = LexState.None
 
-  while src.len > 0:
-    i = 0
-    # separators
-    if src.findRe(re2"^([\n])", m):
+  while i < src.len:
+    let chr = src[i]
+    var prev: char
+    if i > 0:
+      prev = src[i-1]
+    # new lines
+    if chr == '\n':
+      if state == LexState.Comment:
+        state = LexState.None
       line += 1
       col = 1
     else:
       col += 1
     # One-line comments
-    if src.findRe(re2"^(#[^\n]+)", m):
-      discard tkn(src, m, i, tkComment, line, col)
-    # Strings
-    elif src[0] == '\'':
-      let str = parseString(src, '\'', line, col)
-      result.add str.t
-      inc i, str.i
-    elif src[0] == '"':
-      let str = parseString(src, '"', line, col)
-      result.add str.t
-      inc i, str.i
-    elif src[0] == '`':
-      let str = parseString(src, '`', line, col)
-      result.add str.t
-      inc i, str.i
-    # Floats
-    elif src.findRe(re2"^(\d+\.\d+)", m):
-      result.add tkn(src, m, i, tkFloat, line, col)
-    elif src.findRe(re2"^(\.\d+)", m):
-      var token = tkn(src, m, i, tkFloat, line, col)
-      token.value = "0" & token.value
-      result.add token
-    # Integers
-    elif src.findRe(re2"^(\d+)", m):
-      result.add tkn(src, m, i, tkInt, line, col)
-    # Operators
-    elif src.findRe(re2"^(>=|==|<=|!=|&&|\|\||\+\+|\-\-|//)", m):
-      result.add tkn(src, m, i, tkOp, line, col)
-    elif src.findRe(re2"^(\+=|\-=|//=|/=|\*=|&=|@=|\$=|\^=|\?=|%=|\.\.<|\.\.)", m):
-      result.add tkn(src, m, i, tkOp, line, col)
-    elif src.findRe(re2"^(\b(not|or|and|in|of)\b)", m):
-      result.add tkn(src, m, i, tkOp, line, col)
-    elif src.findRe(re2"^([\.\+\-/\\,;:\[\]\(\)\{\}~!@#$%^|&?*=><])", m):
-      result.add tkn(src, m, i, tkOp, line, col)
-    # Boolean
-    elif src.findRe(re2"^(\b(true|false|on|off)\b)", m):
-      result.add tkn(src, m, i, tkBool, line, col)
-    # Keywords
-    elif src.findRe(re2"^(\b(fn|if|elif|else|while|for|case|var|const|continue|break)\b)", m):
-      result.add tkn(src, m, i, tkKeyword, line, col)
-    elif src.findRe(re2"^(\b(print|null)\b)", m):
-      result.add tkn(src, m, i, tkKeyword, line, col)
-    # identifiers
-    elif src.findRe(re2"^(\b[a-zA-Z][a-zA-Z0-9_]*\b)", m):
-      result.add tkn(src, m, i, tkId, line, col)
-    # Whitespaces
-    elif src.findRe(re2"^(\s)", m):
+    if chr == '#' and state == LexState.None:
+      state = LexState.Comment
       inc i
+      continue
+    elif state == LexState.Comment:
+      inc i
+      continue
+    # Strings
+    elif chr == '\'' and state == LexState.None:
+      state = LexState.String
+      current = Token(kind: tkString, pos: i, line: line, col: col, value: $chr)
+      inc i
+    elif chr == '\'' and state == LexState.String and prev != '\\':
+      state = LexState.None
+      current.value &= $chr
+      inc current.pos
+      inc i
+      result.add(current)
+    elif chr == '"' and state == LexState.None:
+      state = LexState.DoubleString
+      current = Token(kind: tkString, pos: i, line: line, col: col, value: $chr)
+      inc i
+    elif chr == '"' and state == LexState.DoubleString and prev != '\\':
+      state = LexState.None
+      current.value &= $chr
+      inc current.pos
+      inc i
+      result.add(current)
+    elif chr == '`' and state == LexState.None:
+      state = LexState.Backtick
+      current = Token(kind: tkString, pos: i, line: line, col: col, value: $chr)
+      inc i
+    elif chr == '`' and state == LexState.Backtick and prev != '\\':
+      state = LexState.None
+      current.value &= $chr
+      inc current.pos
+      inc i
+      result.add(current)
+    elif state in {LexState.String, LexState.Backtick, LexState.DoubleString}:
+      current.value &= $chr
+      inc current.pos
+      inc i
+    # Integer
+    elif (let length = isInteger(src, i); length) > 0:
+      result.add Token(kind: tkInt, pos: i + length, col: col, line: line, value: src[i..<i+length])
+      inc i, length
+    # Floats
+    elif (let length = isFloat(src, i); length) > 0:
+      var value = src[i..<i+length]
+      if value[0] == '.':
+        value = "0" & value
+      result.add Token(kind: tkFloat, pos: i + length, col: col, line: line, value: value)
+      inc i, length
+    # Boolean
+    elif (let length = testFor(src, i, ["true", "false", "on", "off"]); length) > 0:
+      result.add Token(kind: tkBool, pos: i + length, col: col, line: line, value: src[i..<i+length])
+      inc i, length
+    # Operators
+    elif (let length = testFor(src, i, [">=", "==", "<=", "!=", "&&", "||", "++", "--", "//"]); length) > 0:
+      result.add Token(kind: tkOp, pos: i + length, col: col, line: line, value: src[i..<i+length])
+      inc i, length
+    elif (let length = testFor(src, i, ["+=", "-=", "/=", "*=", "&=", "@=", "$=", "^=", "?=", "..<", ".."]); length) > 0:
+      result.add Token(kind: tkOp, pos: i + length, col: col, line: line, value: src[i..<i+length])
+      inc i, length
+    elif (let length = testFor(src, i, ["not", "or", "and", "in", "of"]); length) > 0:
+      result.add Token(kind: tkOp, pos: i + length, col: col, line: line, value: src[i..<i+length])
+      inc i, length
+    elif (let length = testFor(src, i, [".", "+", "-", "/", "\\", "[", "]", "(", ")", "{", "}", "~", "!", "@", "#", "$", "%", "^", "|", "&", "?", ":", ";", ",", "*", "=", ">", "<"]); length) > 0:
+      result.add Token(kind: tkOp, pos: i + length, col: col, line: line, value: src[i..<i+length])
+      inc i, length
+    # Keywords
+    elif (let length = testFor(src, i, ["fn", "if", "elif", "else", "while", "for", "case", "var", "const", "continue", "break", "return"]); length) > 0:
+      # echo src[i..length], ", ", length
+      result.add Token(kind: tkKeyword, pos: i + length, col: col, line: line, value: src[i..<i+length])
+      inc i, length
+    elif (let length = testFor(src, i, ["print", "null"]); length) > 0:
+      result.add Token(kind: tkKeyword, pos: i + length, col: col, line: line, value: src[i..<i+length])
+      inc i, length
+    elif (let length = isIdentifier(src, i); length) > 0:
+      result.add Token(kind: tkId, pos: i + length, col: col, line: line, value: src[i..<i+length])
+      inc i, length
     else:
       inc i
-    src = src[i..^1]
   result.add Token(value: "\0", kind: tkEof, line: line, col: col)
+  # {.noSideEffect.}:
+  #   echo result

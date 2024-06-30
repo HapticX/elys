@@ -8,8 +8,8 @@ import
   options
 
 
-func keyword*(value: string): Reserved = reserved(value, TokenKind.tkKeyword)
-func operator*(value: string): Reserved = reserved(value, TokenKind.tkOp)
+template keyword*(value: string): Reserved = reserved(value, TokenKind.tkKeyword)
+template operator*(value: string): Reserved = reserved(value, TokenKind.tkOp)
 
 
 func processBool*(res: Result): Option[Result] =
@@ -32,10 +32,10 @@ func processString*(res: Result): Option[Result] =
   astRes(stringAst(res.val.get()[1..^2]), res.line, res.col, res.source, res.filepath)
 
 
-func idTag(): Combinator =
+template idTag(): Combinator =
   tag(TokenKind.tkId)
 
-func exprPrecedenceLevels(): seq[seq[string]] =
+template exprPrecedenceLevels(): seq[seq[string]] =
   @[
     @["*", "/", "//"],
     @["+", "-", "%"],
@@ -44,11 +44,11 @@ func exprPrecedenceLevels(): seq[seq[string]] =
     @["and", "&&"],
     @["in"]
   ]
-func incDecOperators(): seq[string] =
+template incDecOperators(): seq[string] =
   @["--", "++"]
-func unaryOperators(): seq[string] =
+template unaryOperators(): seq[string] =
   @["-"]
-func assignOperators(): seq[string] =
+template assignOperators(): seq[string] =
   @["//=", "+=", "-=", "*=", "/=", "="]
 
 
@@ -85,13 +85,13 @@ func ifStatement(): Combinator
 func stmtListEmbed(): Combinator
 
 
-func exprGroup(): Combinator =
+template exprGroup(): Combinator =
   (operator"(" + lazy(expr) + operator")") ^ processGroup
 
 
 func processBExprNot(res: Result): Option[Result] =
   astRes(notAst(res.valy.ast), res.line, res.col, res.source, res.filepath)
-func bExprNot(): Combinator =
+template bExprNot(): Combinator =
   ((operator"!" | operator"not") + lazy(expr)) ^ processBExprNot
 
 
@@ -140,17 +140,17 @@ func bracketExpr(): Combinator =
 func processSliceExpr(res: Result): Option[Result] =
   if res.valx.kind == rkStr:
     astRes(
-      slice(intAst(0), res.valy.ast, res.valx.val.get),
+      slice(intAst(0), res.valy.ast, res.valx.val.get, res.line, res.col, res.source, res.filepath),
       res.line, res.col, res.source, res.filepath
     )
   elif res.valy.kind == rkStr:
     astRes(
-      slice(res.valx.ast, intAst(-1), res.valy.val.get),
+      slice(res.valx.ast, intAst(-1), res.valy.val.get, res.line, res.col, res.source, res.filepath),
       res.line, res.col, res.source, res.filepath
     )
   else:
     astRes(
-      slice(res.valx.valx.ast, res.valy.ast, res.valx.valy.val.get),
+      slice(res.valx.valx.ast, res.valy.ast, res.valx.valy.val.get, res.line, res.col, res.source, res.filepath),
       res.line, res.col, res.source, res.filepath
     )
 func sliceExpr(): Combinator =
@@ -288,7 +288,10 @@ func processBinOp(res: Result): Option[Result] =
     filepath: res.filepath,
     col: res.col,
     valfn: proc(r: Result): Option[Result] =
-      astRes(binOpAst(r.valx.ast, r.valy.ast, res.val.get), r.line, r.col, r.source, r.filepath)
+      astRes(
+        binOpAst(r.valx.ast, r.valy.ast, res.val.get, r.line, r.col, r.source, r.filepath),
+        r.line, r.col, r.source, r.filepath
+      )
   ).some
 
 
@@ -313,7 +316,7 @@ func expr(): Combinator =
 
 func processAssignStmt(res: Result): Option[Result] =
   astRes(
-    assignStmtAst(res.valx.valx.valy.val.get, res.valy.ast, false, true),
+    assignStmtAst(res.valx.valx.valy.val.get, res.valy.ast, false, true, "=", res.line, res.col, res.source, res.filepath),
     res.line, res.col, res.source, res.filepath
   )
 func assignStmt(): Combinator =
@@ -322,7 +325,7 @@ func assignStmt(): Combinator =
 
 func processAssignConstStmt(res: Result): Option[Result] =
   astRes(
-    assignStmtAst(res.valx.valx.valy.val.get, res.valy.ast, true, true),
+    assignStmtAst(res.valx.valx.valy.val.get, res.valy.ast, true, true, "=", res.line, res.col, res.source, res.filepath),
     res.line, res.col, res.source, res.filepath
   )
 func assignConstStmt(): Combinator =
@@ -331,7 +334,7 @@ func assignConstStmt(): Combinator =
 
 func processReAssignStmt(res: Result): Option[Result] =
   astRes(
-    assignStmtAst(res.valx.valx.val.get, res.valy.ast, false, false, res.valx.valy.val.get),
+    assignStmtAst(res.valx.valx.val.get, res.valy.ast, false, false, res.valx.valy.val.get, res.line, res.col, res.source, res.filepath),
     res.line, res.col, res.source, res.filepath
   )
 func reAssignStmt(): Combinator =
@@ -340,7 +343,7 @@ func reAssignStmt(): Combinator =
 
 func processAssignBracketStmt(res: Result): Option[Result] =
   astRes(
-    assignBracket(res.valx.valx.ast.BracketExprAST, res.valy.ast, res.valx.valy.val.get),
+    assignBracket(res.valx.valx.ast.BracketExprAST, res.valy.ast, res.valx.valy.val.get, res.valy.line, res.valy.col, res.valy.source, res.valy.filepath),
     res.valy.line, res.valy.col, res.valy.source, res.valy.filepath
   )
 func assignBracketStmt(): Combinator =
@@ -439,7 +442,10 @@ func processEof(res: Result): Option[Result] =
 
 
 func processUnaryOperatorStmt(res: Result): Option[Result] =
-  astRes(unaryOpAst(res.valy.ast, res.valx.val.get), res.line, res.col, res.source, res.filepath)
+  astRes(
+    unaryOpAst(res.valy.ast, res.valx.val.get, res.line, res.col, res.source, res.filepath),
+    res.line, res.col, res.source, res.filepath
+  )
 func unaryOperatorStmt(): Combinator =
   # -x
   (anyOpInList(unaryOperators()) + (exprValue() | exprGroup())) ^ processUnaryOperatorStmt
@@ -447,9 +453,15 @@ func unaryOperatorStmt(): Combinator =
 
 func processIncDec(res: Result): Option[Result] =
   if res.valx.kind == rkStr:
-    astRes(incDecStmt(res.valy.ast, res.valx.val.get), res.line, res.col, res.source, res.filepath)
+    astRes(
+      incDecStmt(res.valy.ast, res.valx.val.get, res.line, res.col, res.source, res.filepath),
+      res.line, res.col, res.source, res.filepath
+    )
   else:
-    astRes(incDecStmt(res.valx.ast, res.valy.val.get), res.line, res.col, res.source, res.filepath)
+    astRes(
+      incDecStmt(res.valx.ast, res.valy.val.get, res.line, res.col, res.source, res.filepath),
+      res.line, res.col, res.source, res.filepath
+    )
 func incDecStatement(): Combinator =
   # x++
   # --x
@@ -465,7 +477,7 @@ func stmtListEmbed(): Combinator =
 
 func processWhileStatement(res: Result): Option[Result] =
   astRes(whileStmt(res.valx.valy.ast, res.valy.ast), res.line, res.col, res.source, res.filepath)
-func whileStatement(): Combinator =
+template whileStatement(): Combinator =
   (
     keyword"while" + alt(
       (operator"(" + expr() + operator")") ^ processGroup,
@@ -476,13 +488,13 @@ func whileStatement(): Combinator =
 
 func processBreakStatement(res: Result): Option[Result] =
   astRes(BreakStmt(kind: akBreak), res.line, res.col, res.source, res.filepath)
-func breakStatement(): Combinator =
+template breakStatement(): Combinator =
   keyword"break" ^ processBreakStatement
 
 
 func processContinueStatement(res: Result): Option[Result] =
   astRes(ContinueStmt(kind: akContinue), res.line, res.col, res.source, res.filepath)
-func continueStatement(): Combinator =
+template continueStatement(): Combinator =
   keyword"continue" ^ processContinueStatement
 
 
@@ -493,7 +505,7 @@ func processSwapStatement(res: Result): Option[Result] =
     res.valx.valx.valy.ast,
     res.valy.ast
   ), res.line, res.col, res.source, res.filepath)
-func swapStatement(): Combinator =
+template swapStatement(): Combinator =
   let expression = bracketExpr() | (idTag() ^ processVar)
   (
     expression + operator"," + expression + operator"=" + expr() + operator"," + expr()
@@ -505,7 +517,7 @@ func processForInStatement(res: Result): Option[Result] =
   for i in res.valx.valy.valx.valx.arr:
     arr.add i.ast
   astRes(forInStmt(arr, res.valx.valy.valy.ast, res.valy.ast), res.line, res.col, res.source, res.filepath)
-func forInStatement(): Combinator =
+template forInStatement(): Combinator =
   let conditionStatement = alt(
     (operator"(" + repSep(idTag() ^ processVar, operator",") + operator")") ^ processGroup,
     repSep(idTag() ^ processVar, operator","),

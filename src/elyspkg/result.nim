@@ -26,6 +26,29 @@ type
     rkFloat,
     rkFun,
     rkAst
+  BinOperator* {.size: sizeof(int8).} = enum
+    Add,
+    Minus,
+    Multiply,
+    Divide,
+    Mod,
+    Div,
+    And,
+    Or,
+    Equals,
+    NotEquals,
+    More,
+    Less,
+    MoreThan,
+    LessThan,
+    DotDot,
+    DotDotLess,
+    QuestionMark,
+    TwoDots,
+    PlusPlus,
+    MinusMinus,
+    Assignment,
+    None
   ResultFunc* = proc(res: Result): Option[Result]
   Result* = ref object
     case kind*: ResultKind
@@ -47,8 +70,8 @@ type
       of rkAst:
         ast*: ASTRoot
     pos*: int
-    source*, filepath*: ptr string
     line*, col*: int
+    source*, filepath*: ptr string
 
   ASTExpr* = ref object of ASTRoot
   NullAST* = ref object of ASTExpr
@@ -74,18 +97,18 @@ type
     indexes*: seq[ASTRoot]
   SliceExprAST* = ref object of ASTExpr
     l*, r*: ASTRoot
-    op*: string
+    op*: BinOperator
   VarAST* = ref object of ASTExpr
     name*: string
   BinOpAST* = ref object of ASTExpr
-    op*: string
+    op*: BinOperator
     l*, r*: ASTRoot
   UnaryOpAST* = ref object of ASTExpr
-    op*: string
+    op*: BinOperator
     expr*: ASTRoot
   TernaryOpAST* = ref object of ASTExpr
     first*, second*, third*: ASTRoot
-    op1*, op2*: string
+    op1*, op2*: BinOperator
   NotOp* = ref object of ASTExpr
     expr*: ASTRoot
   FuncStmt* = ref object of ASTExpr
@@ -104,13 +127,13 @@ type
     expr*: ASTRoot
     isConst*: bool
     isAssign*: bool
-    assignOp*: string
+    assignOp*: BinOperator
   AssignBracketStmt* = ref object of Stmt
     expr*: BracketExprAST
     val*: ASTRoot
-    op*: string
+    op*: BinOperator
   IncDecStmt* = ref object of Stmt
-    op*: string
+    op*: BinOperator
     expr*: ASTRoot
   ElifBranchStmt* = ref object of Stmt
     condition*: ASTRoot
@@ -168,16 +191,16 @@ func `$`*(ast: ASTRoot): string =
     of akFloat: "FloatAST(" & $ast.FloatAST.val & ")"
     of akString: "StringAST(" & $ast.StringAST.val & ")"
     of akBool: "BoolAST(" & $ast.BoolAST.val & ")"
-    of akBinOp: "BinOpAST(" & $ast.BinOpAST.l & ", " & $ast.BinOpAST.r & ", " & ast.BinOpAST.op & ")"
+    of akBinOp: "BinOpAST(" & $ast.BinOpAST.l & ", " & $ast.BinOpAST.r & ", " & $ast.BinOpAST.op & ")"
     of akVar: "VarAST(" & ast.VarAST.name & ")"
     of akNot: "NotOp(" & $ast.NotOp.expr & ")"
     of akEof: "EOFStmt()"
     of akStmtList: "StmtList(" & ast.StmtList.statements.join(", ") & ")"
     of akIncDec:
       case ast.IncDecStmt.op:
-        of "++":
+        of BinOperator.PlusPlus:
           "Increment(" & $ast.IncDecStmt.expr & ")"
-        of "--":
+        of BinOperator.MinusMinus:
           "Decrement(" & $ast.IncDecStmt.expr & ")"
         else:
           ""
@@ -201,7 +224,7 @@ func `$`*(ast: ASTRoot): string =
     of akCallExpr:
       "CallExprAST(" & ast.CallExprAST.name & ", " & $ast.CallExprAST.args & ")"
     of akSliceExpr:
-      "SliceExprAST(" & $ast.SliceExprAST.l & ast.SliceExprAST.op &
+      "SliceExprAST(" & $ast.SliceExprAST.l & $ast.SliceExprAST.op &
       $ast.SliceExprAST.r & ")"
     of akPrint:
       "PrintStmt(" & $ast.PrintStmt.data & ")"
@@ -241,3 +264,51 @@ func getVal*(res: Result): string =
 
 func `$`*(res: Result): string =
   "Result(" & res.getVal & ")"
+
+
+func op*(self: BinOperator): string =
+  case self:
+  of BinOperator.Add:
+    "+"
+  of BinOperator.Minus:
+    "-"
+  of BinOperator.Multiply:
+    "*"
+  of BinOperator.Divide:
+    "/"
+  of BinOperator.Mod:
+    "%"
+  of BinOperator.Div:
+    "//"
+  of BinOperator.And:
+    "&&"
+  of BinOperator.Or:
+    "||"
+  of BinOperator.Equals:
+    "=="
+  of BinOperator.NotEquals:
+    "!="
+  of BinOperator.More:
+    ">"
+  of BinOperator.Less:
+    "<"
+  of BinOperator.MoreThan:
+    ">="
+  of BinOperator.LessThan:
+    "<="
+  of BinOperator.DotDot:
+    ".."
+  of BinOperator.DotDotLess:
+    "..<"
+  of BinOperator.QuestionMark:
+    "?"
+  of BinOperator.TwoDots:
+    ":"
+  of BinOperator.PlusPlus:
+    "++"
+  of BinOperator.MinusMinus:
+    "--"
+  of BinOperator.Assignment:
+    "="
+  of BinOperator.None:
+    ""

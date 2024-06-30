@@ -6,38 +6,38 @@ import
 suite "Elys":
 
   test "Variables":
-    exec("""
+    exec"""
     # Here we just declare variables
     var x = 10
     var y = 20
-    """)
+    """
 
   test "Basic math":
-    exec("""
+    exec"""
     print -5 + 10
     print 2 + 2 * 2 / -10 * .1
-    """)
+    """
 
   test "increment / decrement":
-    exec("""
+    exec"""
     var x = 10
     print x
     print x++
     print ++x
-    """)
+    """
 
   test "Basic bool operations":
-    exec("""
+    exec"""
     var x = true
     var y = false
     x = true or false
     print x
     print x and y, x or y
     print 2 + 2 * 2 == 6, (2 + 2) * 2 == 8
-    """)
+    """
 
   test "if-elif-else bool operations":
-    exec("""
+    exec"""
     if 0 {
       print "0!"
     } elif (false) {
@@ -62,18 +62,18 @@ suite "Elys":
 
     var x = if ("") {0} elif (true) {"hello"} else {.0}
     print x
-    """)
+    """
   
   test "embedded statements":
-    exec("""
+    exec"""
     var x = {
       10
     }
     print x
-    """)
+    """
   
   test "while statement":
-    exec("""
+    exec"""
     var y = 0
     print {
       var x = 0
@@ -90,10 +90,10 @@ suite "Elys":
       x
     }
     print y
-    """)
+    """
   
   test "test arrays":
-    exec("""
+    exec"""
     var x = [1, 2, 3, 4, 5]
     var y = [
       1  # you can create arrays also without comma
@@ -136,10 +136,10 @@ suite "Elys":
       while x < 2 {x++}
       x
     }..]
-    """)
+    """
   
   test "swap":
-    exec("""
+    exec"""
     var x = [1 2 3 4 5]
     var y = [6 7 8 9 10]
 
@@ -148,10 +148,10 @@ suite "Elys":
     print x, y
     x[0], y[0] = 100, 50
     print x, y
-    """)
+    """
   
   test "for statement":
-    exec("""
+    exec"""
     var x = [10 11 12 13 14]
     for i, v in x {
       print i, v
@@ -177,10 +177,10 @@ suite "Elys":
     } {
       print v
     }
-    """)
+    """
   
   test "dictionaries":
-    exec("""
+    exec"""
     var x = {
       "hello": "world",
       123: true,
@@ -205,7 +205,7 @@ suite "Elys":
     x[off] = 'it\'s like false :)'
     print x
     print x[12039]['0'][0]["x"]
-    """)
+    """
   
   test "generators":
     exec"""

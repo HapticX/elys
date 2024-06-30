@@ -8,7 +8,12 @@ import
   os
 
 
-when isMainModule:
+const
+  isPython = defined(python)
+  isBindings = isPython
+
+
+when isMainModule and not isBindings:
   import
     terminal,
     std/cmdline,
@@ -16,26 +21,25 @@ when isMainModule:
   const VERSION = "0.4.0"
 
 
-func compile(code: string, file: string = "$file"): ASTRoot =
-  let tokens = code.parseForTokens
-  # {.cast(noSideEffect).}:
-  #   echo tokens
-  var
-    source: string = code
-    sourcePointer: ptr string = addr source
-    filepath: string = file
-    filepathPointer: ptr string = addr filepath
-  let parsed = tokens.elysParser(sourcePointer, filepathPointer)
-  if parsed.isSome:
-    var env = newEnv()
-    discard parsed.get.ast.eval(env)
+when not isBindings:
+  func compile(code: string, file: string = "$file"): ASTRoot =
+    let tokens = code.parseForTokens
+    var
+      source: string = code
+      sourcePointer: ptr string = addr source
+      filepath: string = file
+      filepathPointer: ptr string = addr filepath
+    let parsed = tokens.elysParser(sourcePointer, filepathPointer)
+    if parsed.isSome:
+      var env = newEnv()
+      discard parsed.get.ast.eval(env)
+  func exec*(code: string): ASTRoot {.discardable, exportc.} =
+    compile(code)
+elif isPython:
+  import ./elyspkg/bindings/py
 
 
-func exec*(code: string): ASTRoot {.discardable, exportc.} =
-  compile(code)
-
-
-when isMainModule:
+when isMainModule and not isBindings:
   proc run(file: string, params: seq[string]): int =
     let filepath =
       if file.endsWith(".elys"):
